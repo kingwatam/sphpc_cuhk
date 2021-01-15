@@ -1,4 +1,7 @@
+*
+!*/
+!*.r
+!*.rmd
+!.gitignore
+bert/functions/
 .Rproj.user
-.Rhistory
-.RData
-.Ruserdata
