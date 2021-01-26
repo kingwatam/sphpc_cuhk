@@ -39,65 +39,65 @@ CLPM_meaning_support <- '
   meaning.2 ~~ meaning.2 
 '
 # CLPM meaning & ED5Q ----
-CLPM_meaning_EQ5D <- '
+CLPM_meaning_eq5d <- '
   # Estimate the lagged effects between the observed variables.
-  EQ5D.1 + meaning.1 ~ EQ5D.0 + meaning.0 
-  EQ5D.2 + meaning.2 ~ EQ5D.1 + meaning.1 
+  eq5d.1 + meaning.1 ~ eq5d.0 + meaning.0 
+  eq5d.2 + meaning.2 ~ eq5d.1 + meaning.1 
   
   # # Regression of observed variables on z1 (constrained).
-  # EQ5D.0 + EQ5D.1 + EQ5D.2  ~ age.0 + female + cssa + alone # Constrained over time.
+  # eq5d.0 + eq5d.1 + eq5d.2  ~ age.0 + female + cssa + alone # Constrained over time.
   # meaning.0 + meaning.1 + meaning.2 ~ age.0 + female + cssa + alone # Constrained over time.
   
   # Estimate the covariance between the observed variables at the first wave. 
-  EQ5D.0 ~~ meaning.0 # Covariance
+  eq5d.0 ~~ meaning.0 # Covariance
   
   # Estimate the covariances between the residuals of the observed variables.
-  EQ5D.1 ~~ meaning.1
-  EQ5D.2 ~~ meaning.2
+  eq5d.1 ~~ meaning.1
+  eq5d.2 ~~ meaning.2
   
   # Estimate the (residual) variance of the observed variables.
   
-  EQ5D.0 ~~ EQ5D.0 # Variances
+  eq5d.0 ~~ eq5d.0 # Variances
   meaning.0 ~~ meaning.0 
-  EQ5D.1 ~~ EQ5D.1 # Residual variances
+  eq5d.1 ~~ eq5d.1 # Residual variances
   meaning.1 ~~ meaning.1 
-  EQ5D.2 ~~ EQ5D.2 
+  eq5d.2 ~~ eq5d.2 
   meaning.2 ~~ meaning.2 
 '
 
 # CLPM meaning & support ----
-CLPM_support_EQ5D <- '
+CLPM_support_eq5d <- '
   # Estimate the lagged effects between the observed variables.
-  support.1 + EQ5D.1 ~ support.0 + EQ5D.0 
-  support.2 + EQ5D.2 ~ support.1 + EQ5D.1 
+  support.1 + eq5d.1 ~ support.0 + eq5d.0 
+  support.2 + eq5d.2 ~ support.1 + eq5d.1 
   
   # # Regression of observed variables on z1 (constrained).
   # support.0 + support.1 + support.2  ~ age.0 + female + cssa + alone # Constrained over time.
-  # EQ5D.0 + EQ5D.1 + EQ5D.2 ~ age.0 + female + cssa + alone # Constrained over time.
+  # eq5d.0 + eq5d.1 + eq5d.2 ~ age.0 + female + cssa + alone # Constrained over time.
   
   # Estimate the covariance between the observed variables at the first wave. 
-  support.0 ~~ EQ5D.0 # Covariance
+  support.0 ~~ eq5d.0 # Covariance
   
   # Estimate the covariances between the residuals of the observed variables.
-  support.1 ~~ EQ5D.1
-  support.2 ~~ EQ5D.2
+  support.1 ~~ eq5d.1
+  support.2 ~~ eq5d.2
   
   # Estimate the (residual) variance of the observed variables.
   
   support.0 ~~ support.0 # Variances
-  EQ5D.0 ~~ EQ5D.0 
+  eq5d.0 ~~ eq5d.0 
   support.1 ~~ support.1 # Residual variances
-  EQ5D.1 ~~ EQ5D.1 
+  eq5d.1 ~~ eq5d.1 
   support.2 ~~ support.2 
-  EQ5D.2 ~~ EQ5D.2 
+  eq5d.2 ~~ eq5d.2 
 '
 
 # CLPM fitting ----
 CLPM.fit1 <- lavaan::lavaan(CLPM_meaning_support, data = dfwide, missing = 'ML', meanstructure = T, int.ov.free = T) 
 summary(CLPM.fit1, standardized = TRUE)
-CLPM.fit2 <- lavaan::lavaan(CLPM_support_EQ5D, data = dfwide, missing = 'ML', meanstructure = T, int.ov.free = T) 
+CLPM.fit2 <- lavaan::lavaan(CLPM_support_eq5d, data = dfwide, missing = 'ML', meanstructure = T, int.ov.free = T) 
 summary(CLPM.fit2, standardized = TRUE)
-CLPM.fit3 <- lavaan::lavaan(CLPM_meaning_EQ5D, data = dfwide, missing = 'ML', meanstructure = T, int.ov.free = T) 
+CLPM.fit3 <- lavaan::lavaan(CLPM_meaning_eq5d, data = dfwide, missing = 'ML', meanstructure = T, int.ov.free = T) 
 summary(CLPM.fit3, standardized = TRUE)
 
 labels = list(support0 = "Social support T0",
