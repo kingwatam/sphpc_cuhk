@@ -18,19 +18,310 @@ wc2 <- haven::read_sav("WC 2nd.sav")
 cc1 <- haven::read_sav("CC 1st.sav")
 cc2 <- haven::read_sav("CC 2nd.sav")
 
+# data clean & merge ----
 names(dm2)[names(dm2) %in% names(select(dm2, ends_with("_R")))] <- tolower(names(select(dm2, ends_with("_R"))))
 names(ht2)[names(ht2) %in% names(select(ht2, ends_with("_R")))] <- tolower(names(select(ht2, ends_with("_R"))))
 names(wc2)[names(wc2) %in% names(select(wc2, ends_with("_R")))] <- tolower(names(select(wc2, ends_with("_R"))))
 names(cc2)[names(cc2) %in% names(select(cc2, ends_with("_R")))] <- tolower(names(select(cc2, ends_with("_R"))))
+
+ht2$Age <- car::recode(ht2$Age, "
+'5X' = 55
+")
+wc2$Age <- car::recode(wc2$Age, "
+'> 50' = NA;
+'> 65' = NA;
+'30-50' = NA;
+'5X' = 55;
+")
+cc2$Age <- car::recode(cc2$Age, "
+'45-50' = 48;
+'50-55' = 53;
+")
+
+dm1$Gender <- car::recode(as.numeric(dm1$Gender), "
+1 = 'Male';
+2 = 'Female'
+")
+dm2$Gender <- car::recode(dm2$Gender, "
+'M' = 'Male';
+'F' = 'Female';
+'' = NA
+")
+ht1$Gender <- car::recode(as.numeric(ht1$Gender), "
+1 = 'Male';
+2 = 'Female'
+")
+ht2$Gender <- car::recode(ht2$Gender, "
+'M' = 'Male';
+'F' = 'Female';
+'' = NA
+")
+wc1$Gender <- car::recode(as.character(wc1$Sex), "
+'M' = 'Male';
+'F' = 'Female'
+")
+wc2$Gender <- car::recode(wc2$Gender, "
+'M' = 'Male';
+'F' = 'Female';
+'?' = NA
+")
+cc1$Gender <- car::recode(as.character(cc1$Sex), "
+'M' = 'Male';
+'F' = 'Female'
+")
+cc2$Gender <- car::recode(cc2$Gender, "
+'M' = 'Male';
+'F' = 'Female';
+'' = NA
+")
+
+dm1$marital <- car::recode(as.numeric(dm1$marital), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+dm2$marital <- car::recode(as.numeric(dm2$marital_C), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+ht1$marital <- car::recode(as.numeric(ht1$marital), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+ht2$marital <- car::recode(as.numeric(ht2$marital_C), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+wc1$marital <- car::recode(as.numeric(wc1$marital), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+wc2$marital <- car::recode(as.numeric(wc2$marital_C), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+cc1$marital <- car::recode(as.numeric(cc1$marital), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+cc2$marital <- car::recode(as.numeric(cc2$marital_C), "
+1 = 'Single';
+c(2,4) = 'Married/cohabitating';
+3 = 'Divorce/separated';
+5 = 'Widowed';
+c(6, 9, NA) =  NA
+")
+
+dm1$education <- car::recode(as.numeric(dm1$education), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+dm2$education <- car::recode(as.numeric(dm2$education_C), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+ht1$education <- car::recode(as.numeric(ht1$education), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+ht2$education <- car::recode(as.numeric(ht2$education_C), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+wc1$education <- car::recode(as.numeric(wc1$education), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+wc2$education <- car::recode(as.numeric(wc2$education_C), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+cc1$education <- car::recode(as.numeric(cc1$education), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+cc2$education <- car::recode(as.numeric(cc2$education_C), "
+c(1, 2) = 'Primary school or below';
+c(3) = 'Some secondary school';
+c(4, 5) = 'Secondary school/diploma';
+6 = 'University';
+c(9, NA) = NA
+")
+
+dm1$employment <- car::recode(as.numeric(dm1$occupation), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+dm2$employment <- car::recode(as.numeric(dm2$occupation_C), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+ht1$employment <- car::recode(as.numeric(ht1$occupation), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+ht2$employment <- car::recode(as.numeric(ht2$occupation_C), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+wc1$employment <- car::recode(as.numeric(wc1$occupation), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+wc2$employment <- car::recode(as.numeric(wc2$occupation_C), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+cc1$employment <- car::recode(as.numeric(cc1$occupation), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+cc2$employment <- car::recode(as.numeric(cc2$occupation_C), "
+1 = 'Full-time';
+2 = 'Part-time';
+3 = 'Unemployed';
+4 = 'Homemaker';
+5 = 'Retired';
+c(9, NA) = NA
+")
+
+
+dm1$time <- 1
+dm2$time <- 2
+ht1$time <- 1
+ht2$time <- 2
+wc1$time <- 1
+wc2$time <- 2
+cc1$time <- 1
+cc2$time <- 2
+
 dm12 <- plyr::rbind.fill(dm1, dm2)
 ht12 <- plyr::rbind.fill(ht1, ht2)
 wc12 <- plyr::rbind.fill(wc1, wc2)
 cc12 <- plyr::rbind.fill(cc1, cc2)
 
+dm12$age <- ifelse(dm12$Age == "", NA, as.numeric(dm12$Age))
+ht12$age <- ifelse(ht12$Age == "", NA, as.numeric(ht12$Age))
+wc12$age <- ifelse(wc12$Age == "", NA, as.numeric(wc12$Age))
+cc12$age <- ifelse(cc12$Age == "", NA, as.numeric(cc12$Age))
+
+dm12$gender <- factor(dm12$Gender, levels = c("Male", "Female"))
+ht12$gender <- factor(ht12$Gender, levels = c("Male", "Female"))
+wc12$gender <- factor(wc12$Gender, levels = c("Male", "Female"))
+cc12$gender <- factor(cc12$Gender, levels = c("Male", "Female"))
+
+dm12$marital <- factor(dm12$marital, levels = c("Single", "Married/cohabitating", "Divorce/separated", "Widowed"))
+ht12$marital <- factor(ht12$marital, levels = c("Single", "Married/cohabitating", "Divorce/separated", "Widowed"))
+wc12$marital <- factor(wc12$marital, levels = c("Single", "Married/cohabitating", "Divorce/separated", "Widowed"))
+cc12$marital <- factor(cc12$marital, levels = c("Single", "Married/cohabitating", "Divorce/separated", "Widowed"))
+
+dm12$education <- factor(dm12$education, levels = c("Primary school or below", "Some secondary school", "Secondary school/diploma", "University"))
+ht12$education <- factor(ht12$education, levels = c("Primary school or below", "Some secondary school", "Secondary school/diploma", "University"))
+wc12$education <- factor(wc12$education, levels = c("Primary school or below", "Some secondary school", "Secondary school/diploma", "University"))
+cc12$education <- factor(cc12$education, levels = c("Primary school or below", "Some secondary school", "Secondary school/diploma", "University"))
+
+dm12$employment <- factor(dm12$employment, levels = c("Full-time", "Part-time", "Unemployed", "Homemaker", "Retired"))
+ht12$employment <- factor(ht12$employment, levels = c("Full-time", "Part-time", "Unemployed", "Homemaker", "Retired"))
+wc12$employment <- factor(wc12$employment, levels = c("Full-time", "Part-time", "Unemployed", "Homemaker", "Retired"))
+cc12$employment <- factor(cc12$employment, levels = c("Full-time", "Part-time", "Unemployed", "Homemaker", "Retired"))
+
 # descriptive statistics ----
+dm12$age_group <- recode_age(dm12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
+ht12$age_group <- recode_age(ht12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
+wc12$age_group <- recode_age(wc12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
+cc12$age_group <- recode_age(cc12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
 
+numVars <- c("age_group", "gender", "marital", "education", "employment")
+catVars <- c("age_group", "gender", "marital", "education", "employment")
+tableone::CreateTableOne(data =  dm12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  ht12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  wc12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  cc12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
 
-# DM ----
+tableone::CreateTableOne(data =  dm12, vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  ht12, vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  wc12, vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+tableone::CreateTableOne(data =  cc12, vars = numVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+# Reliability (internal consistency) ----
+#  DM ----
 dm12 %>% 
   select(dm3, dm4, dm5, dm8) %>%
   alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")]
@@ -65,7 +356,7 @@ dm12 %>%
                , use = "pairwise.complete.obs"
                )# %>% .[c("title", "total")]
 
-# HT ----
+#  HT ----
 ht12 %>% 
   select(ht3, ht4, ht5, ht8) %>%
   alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")]
@@ -101,7 +392,7 @@ ht12 %>%
         , use = "pairwise.complete.obs"
   ) %>% .[c("title", "total")]
 
-# WC ----
+#  WC ----
 wc12 %>% 
   select(wc5, wc6, wc7, wc10) %>%
   alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")]
@@ -136,7 +427,7 @@ wc12 %>%
         , use = "pairwise.complete.obs"
   ) %>% .[c("title", "total")]
 
-# cc ----
+#  cc ----
 cc12 %>% 
   select(cc5, cc6, cc7, cc10) %>%
   alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")]
