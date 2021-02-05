@@ -9,6 +9,7 @@ library(dplyr)
 library(lme4)
 library(lmerTest) # calculate p-values in summary()
 library(ggplot2)
+library(ggpubr) # ggerrorplot
 
 setwd(sprintf("~%s/multimorbidity", setpath))
 df <- haven::read_sav("JC_covid_data_Jul_Wide_20200728.sav")
@@ -79,6 +80,27 @@ df$phq_gp_tel <- car::recode(df$phq_total_tel, "
 20:hi = 5
 ")
 
+# fix mis-coding in ISI groups
+df$ISI_group_bl <- car::recode(df$ISI_bl, "
+0:7 = 1;
+8:14 = 2;
+15:21 = 3;
+22:hi = 4
+")
+
+df$ISI_groupf1 <- car::recode(df$isif1, "
+0:7 = 1;
+8:14 = 2;
+15:21 = 3;
+22:hi = 4
+")
+
+df$isi_gp_tel <- car::recode(df$isi_total_tel, "
+0:7 = 1;
+8:14 = 2;
+15:21 = 3;
+22:hi = 4
+")
 
 df[, c("efs4f0", "efs4f1", "EFS4tel")] <- sapply(df[, c("efs4f0", "efs4f1", "EFS4tel")], function(x){(as.numeric(x)-2)*-1}) # reverse code from 0:2 to 2:0
 df$efs4f0 <- car::recode(df$efs4f0, # ad-hoc fix for strange behaviour for efs4f0
@@ -196,13 +218,13 @@ reg_table <- function(data){
   for (dep_var in c("meaning", "support", "eq5d", "eq5dvas", 
                     # "moca", "mci",
                     "loneliness", "loneliness_emo", "loneliness_soc", 
-                    "gad", "gad_group", "isi", "phq", "phq_group")){
+                    "gad", "gad_group", "isi", "isi_group", "phq", "phq_group")){
     
     dep_var <- paste0(dep_var, ".2")
     
     for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
                   "loneliness", "loneliness_emo", "loneliness_soc", 
-                  "gad", "gad_group", "isi", "phq", "phq_group")){
+                  "gad", "gad_group", "isi", "isi_group", "phq", "phq_group")){
       var_original <- var
       
       # create difference variables
@@ -213,7 +235,7 @@ reg_table <- function(data){
       for (suffix in c(".dif10", ".dif21", ".dif20")){
         var <- paste0(var_original, suffix)
         
-        # var <- paste0(var_original, ".1")
+        # var <- paste0(var_original, ".2") # instead of difference
         
         if (!(var %in% unlist(table[1]))){
           table[row_count, 1] <- var
@@ -248,25 +270,31 @@ reg_table <- function(data){
 }
 
 reg_table2 <- function(data){ # change as dependent variable
-  table <- data.frame(matrix(ncol = 15,  nrow = 0))
+  table <- data.frame(matrix(ncol = 16,  nrow = 0))
   row_count <- 1
   col_count <- 2
   
-  for (dep_var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
+  for (dep_var in c("meaning", "support", "eq5d", "eq5dvas",
                     "loneliness", "loneliness_emo", "loneliness_soc", 
-                    "gad", "gad_group", "isi", "phq", "phq_group")){
+                    "gad", "gad_group", "isi", "isi_group", "phq", "phq_group",
+                    "moca", "mci")){
     
     # create difference variables
     eval_("data$", dep_var, ".dif10", " <- ", "data$", dep_var, ".1 -", "data$", dep_var, ".0")
     eval_("data$", dep_var, ".dif21", " <- ", "data$", dep_var, ".2 -", "data$", dep_var, ".1")
     eval_("data$", dep_var, ".dif20", " <- ", "data$", dep_var, ".2 -", "data$", dep_var, ".0")
     
-    dep_var <- paste0(dep_var, ".dif21")
+    dep_var <- paste0(dep_var, ".dif10")
     
-    for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
+    for (var in c("meaning", "support", "eq5d", "eq5dvas", 
                   "loneliness", "loneliness_emo", "loneliness_soc", 
-                  "gad", "gad_group", "isi", "phq", "phq_group")){
+                  "gad", "gad_group", "isi",  "isi_group", "phq", "phq_group",
+                  "moca", "mci")){
       var_original <- var
+      
+      eval_("data$", var, ".dif10", " <- ", "data$", var, ".1 -", "data$", var, ".0")
+      eval_("data$", var, ".dif21", " <- ", "data$", var, ".2 -", "data$", var, ".1")
+      eval_("data$", var, ".dif20", " <- ", "data$", var, ".2 -", "data$", var, ".0")
       
       for (suffix in c(".dif10", ".dif21", ".dif20")){
         var <- paste0(var_original, suffix)
@@ -308,11 +336,10 @@ reg_table2 <- function(data){ # change as dependent variable
   return(table)
 }
 
-table2 <- reg_table2(dfwide)
+table <- reg_table2(dfwide)
 
 dfwide$mci_hist <- ifelse(dfwide$mci.0 %in% NA | dfwide$mci.1 %in% NA, NA,
                        paste(dfwide$mci.0, dfwide$mci.1, sep = ""))
-
 
 # generate difference variables
 for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
@@ -324,11 +351,11 @@ for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
   eval_("dfwide$", var, ".dif20", " <- ", "dfwide$", var, ".2 -", "dfwide$", var, ".0")
 }
 
-lm(isi.2~ 1+age.2+female+cssa+CD+
-     mci.dif10+support.dif21+meaning.dif21, data = dfwide) %>% summary()
+lm(isi.dif21~ 1+age.2+female+cssa+CD+
+     mci.dif10+support.dif21+loneliness.dif21+phq.dif21, data = dfwide) %>% summary()
 
-lm(eq5d.2~ 1+age.2+female+cssa+CD+
-     gad_group.dif21, data = dfwide) %>% summary()
+lm(meaning.dif21~ 1+age.2+female+cssa+CD+isi.dif21+
+     mci.dif10+support.dif21+loneliness.dif21+phq.dif21, data = dfwide) %>% summary()
 
 lmer(meaning~ 1+date+CD+moca+ (1| case_id) ,
      REML = TRUE, data = df, ) %>% summary()
@@ -350,6 +377,21 @@ lmer(meaning~ 1+time+age+female+cssa+alone+EFS4_hist3+ (1 | case_id) ,
 lm(meaning.2~ 1+meaning.1+age.2+female+cssa+alone+support.1+support.2, data = dfwide) %>% summary()
 
 # LM charts ----
+ggline(df, x = "time", y = "mci", add = "mean_ci") # %>% ggpar(ylim = c(0, 5.5))
+
+ggerrorplot(df, x = "time", y = "support",
+            desc_stat = "mean_ci"
+            , add = "mean", error.plot = "errorbar"
+) # %>% ggpar(ylim = c(0, 5.5))
+
+ggplot(df, aes(x=time, y=meaning, color=support, shape=support)) +
+  # geom_point() +
+  geom_smooth(method=lm, aes(fill=support))
+
+ggplot(df, aes(x=meaning, y=eq5dvas, color=time, shape=time)) +
+  # geom_point() +
+  geom_smooth(method=lm, aes(fill=time))
+
 ggplot(df, aes(x=CD, y=meaning, color=time, shape=time)) +
   # geom_point() +
   geom_smooth(method=lm, aes(fill=time))
@@ -358,16 +400,15 @@ ggplot(df, aes(x=CD, y=support, color=time, shape=time)) +
   # geom_point() +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=EQ5D, color=time, shape=time)) +
+ggplot(df, aes(x=CD, y=eq5d, color=time, shape=time)) +
   # geom_point() +
   labs(x = "Number of chronic conditions", y = "EQ5D-5L Score") +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=EQVAS, color=time, shape=time)) +
+ggplot(df, aes(x=CD, y=eq5dvas, color=time, shape=time)) +
   # geom_point() +
   labs(x = "Number of chronic conditions", y = "EQ-VAS") +
   geom_smooth(method=lm, aes(fill=time))
-
 
 ggplot(df, aes(x=date, y=time, color=time, shape=time)) +
   # geom_point() +
