@@ -300,6 +300,12 @@ ht12$age_group <- recode_age(ht12$age, age_labels = c("18-45", "46-55", "56-65",
 wc12$age_group <- recode_age(wc12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
 cc12$age_group <- recode_age(cc12$age, age_labels = c("18-45", "46-55", "56-65", "66-75", "75+"))
 
+# keep only those those answered at least one of the items for calculating reliability
+dm12 <- dm12 %>% filter(!is.na(dm30_r))
+ht12 <- ht12 %>% filter(!is.na(ht30_r))
+wc12 <- wc12 %>% filter(!is.na(wc29_r))
+cc12 <- cc12 %>% filter(!is.na(cc29_r))
+
 numVars <- c("age_group", "gender", "marital", "education", "employment")
 catVars <- c("age_group", "gender", "marital", "education", "employment")
 tableone::CreateTableOne(data =  dm12, strata = "time", vars = numVars, factorVars = catVars) %>% 
@@ -324,7 +330,7 @@ tableone::CreateTableOne(data =  cc12, vars = numVars, factorVars = catVars) %>%
 #  DM ----
 dm12 %>% 
   select(dm3, dm4, dm5, dm8) %>%
-  alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")]
+  alpha(title = "Accessibility", check.keys=TRUE) %>% .[c("title", "total")] 
 
 dm12 %>% 
   select(dm9, dm10_r, dm11_r, dm12, dm13, dm14_r, dm15_r, dm16, dm17, dm18, dm29, dm30_r, dm44, dm45) %>%
@@ -355,6 +361,68 @@ dm12 %>%
                , check.keys=TRUE
                , use = "pairwise.complete.obs"
                )# %>% .[c("title", "total")]
+
+# concurrent validity ----
+dm12 %>% 
+  select(dm3, dm4, dm5, dm8, 
+         dm9, dm10_r, dm11_r, dm12, dm13, dm14_r, dm15_r, dm16, dm17, dm18, 
+         dm19_r, dm20_r, dm21_r, dm22_r, 
+         # dm23_r, 
+         dm24, dm25, dm26, dm27, dm28_r, dm29, dm30_r, dm31, 
+         # dm32_r, dm34_r,
+         dm33, dm35, dm36, 
+         # dm37_r, 
+         dm38, dm39_r, dm40, 
+         dm41, dm42, dm43_r, dm44, dm45, dm46_r
+  ) %>% psych::corr.test(., .[, "dm41"], use =  "pairwise.complete.obs", method = "pearson") %>% cbind(round_format(.$r, 3), round_format(.$p, 4))
+
+dm12_ <- 
+  dm12 %>% 
+  select(dm3, dm4, dm5, dm8, dm42) %>%
+  # select(dm9, dm10_r, dm11_r, dm12, dm13, dm14_r, dm15_r, dm16, dm17, dm18, dm29, dm30_r, dm44, dm45, dm42) %>%
+  # select(dm19_r, dm20_r, dm21_r, dm22_r, dm24, dm25, dm26, dm27, dm28_r, dm31, dm33, dm35, dm36, dm38, dm39_r, dm42) %>%
+  # select(dm40, dm41, dm42, dm43_r, dm42) %>%
+  mutate(score = rowSums(.[, -(names(.) %in% ("dm42"))], na.rm = FALSE))
+psych::corr.test(dm12_[, "score"], dm12_[, "dm42"], use =  "pairwise.complete.obs", method = "pearson") %>% cbind(round_format(.$r, 3), round_format(.$p, 4))
+
+
+ht12_ <- 
+  ht12 %>% 
+  # select(ht3, ht4, ht5, ht8, ht42) %>%
+  # select(ht9, ht10_r, ht11_r, ht12, ht13, ht14_r, ht15_r, ht16, ht17, ht18, ht29, ht30_r, ht44, ht45, ht42) %>%
+  # select(ht19_r, ht20_r, ht21_r, ht22_r, ht24, ht25, ht26, ht27, ht28_r, ht31, ht33, ht35, ht36, ht38, ht39_r, ht42) %>%
+  select(ht40, ht41, ht42, ht43_r, ht40) %>%
+  mutate(score = rowSums(.[, -(names(.) %in% ("ht40"))], na.rm = FALSE))
+psych::corr.test(ht12_[, "score"], ht12_[, "ht40"], use =  "pairwise.complete.obs", method = "pearson") %>% cbind(round_format(.$r, 3), round_format(.$p, 4))
+
+
+wc12_ <- 
+  wc12 %>% 
+  # select(wc5, wc6, wc7, wc10, wc37) %>%
+  # select(wc11, wc12_r, wc13_r, wc14, wc15, wc16_r, wc17_r, wc18, wc19, wc20, wc28, wc29_r, wc39, wc40, wc37) %>%
+  # select(wc21_r, wc23,	wc24,	wc25,	wc26, wc27_r, wc30, wc32, wc33_r, wc37) %>%
+  # select(wc34, wc35, wc36, wc37, wc38_r, wc37) %>%
+  mutate(score = rowSums(.[, -(names(.) %in% ("wc37"))], na.rm = FALSE))
+psych::corr.test(wc12_[, "score"], wc12_[, "wc37"], use =  "pairwise.complete.obs", method = "pearson") %>% cbind(round_format(.$r, 3), round_format(.$p, 4))
+
+cc12_ <- 
+  cc12 %>% 
+  select(cc5, cc6, cc7, cc10, cc36) %>%
+  # select(cc11, cc12_r, cc13_r, cc14, cc15, cc16_r, cc17_r, cc18, cc19, cc20, cc28, cc29_r, cc39, cc40, cc36) %>%
+  # select(cc21_r, cc23,	cc24,	cc25,	cc26, cc27_r, cc30, cc32, cc33_r, cc36) %>%
+  # select(cc34, cc35, cc36, cc37, cc38_r, cc36) %>%
+  mutate(score = rowSums(.[, -(names(.) %in% ("cc36"))], na.rm = FALSE))
+psych::corr.test(cc12_[, "score"], cc12_[, "cc36"], use =  "pairwise.complete.obs", method = "pearson") %>% cbind(round_format(.$r, 3), round_format(.$p, 4))
+
+
+dfCorTest <- function(df){
+  rslt <- cor.test(df[[3]], df[[8]], method="pearson", use="pairwise")
+  
+  return(c(estimate = rslt$estimate,
+           p.value = rslt$p.value))
+}
+cor_results <- t(sapply(sheet_list, dfCorTest))
+
 
 #  HT ----
 ht12 %>% 
@@ -390,7 +458,7 @@ ht12 %>%
   alpha(title = "ht12"
         , check.keys=TRUE
         , use = "pairwise.complete.obs"
-  ) %>% .[c("title", "total")]
+  ) # %>% .[c("title", "total")]
 
 #  WC ----
 wc12 %>% 
@@ -425,7 +493,7 @@ wc12 %>%
   alpha(title = "wc2"
         , check.keys=TRUE
         , use = "pairwise.complete.obs"
-  ) %>% .[c("title", "total")]
+  ) # %>% .[c("title", "total")]
 
 #  cc ----
 cc12 %>% 
@@ -460,7 +528,7 @@ cc12 %>%
   alpha(title = "cc2"
         , check.keys=TRUE
         , use = "pairwise.complete.obs"
-  ) %>% .[c("title", "total")]
+  ) # %>% .[c("title", "total")]
 
 # factor analysis ----
 normalize <- function(x){
