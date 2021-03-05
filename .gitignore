@@ -3,5 +3,6 @@
 !*.r
 !*.rmd
 !.gitignore
+!LICENSE
 bert/functions/
 .Rproj.user
