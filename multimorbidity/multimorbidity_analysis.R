@@ -13,6 +13,7 @@ library(ggpubr) # ggerrorplot
 
 setwd(sprintf("~%s/multimorbidity", setpath))
 df <- readRDS("JC_covid_data_long.rds")
+# write.csv(df, file = "JC_covid_data_long.csv")
 dfwide <- readRDS("JC_covid_data_wide.rds")
 
 # df$efs4_hist2 <- car::recode(df$efs4_hist, "
@@ -28,6 +29,8 @@ df$efs4 <- relevel(as.factor(df$efs4), ref = 'Never')
 # df$time <- as.numeric(df$time)
 
 df$covid <- if_else(df$time == 2, 1, 0)
+df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
+dfwide$age_group.2 <- recode_age(dfwide$age.2, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 
 # main analysis ----
 reg_table <- function(data){
@@ -156,7 +159,7 @@ reg_table2 <- function(data){ # change as dependent variable
   return(table)
 }
 
-table <- reg_table2(dfwide)
+# table <- reg_table2(dfwide)
 
 dfwide$mci_hist <- ifelse(dfwide$mci.0 %in% NA | dfwide$mci.1 %in% NA, NA,
                        paste(dfwide$mci.0, dfwide$mci.1, sep = ""))
@@ -171,17 +174,66 @@ for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
   eval_("dfwide$", var, ".dif20", " <- ", "dfwide$", var, ".2 -", "dfwide$", var, ".0")
 }
 
-lm(isi.dif21~ 1+age.2+female+cssa+CD+
-     mci.dif10+support.dif21+loneliness.dif21+phq.dif21, data = dfwide) %>% summary()
+df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
+df$time <- relevel(as.factor(df$time), ref = "1")
 
-lm(meaning.dif21~ 1+age.2+female+cssa+CD+isi.dif21+
-     mci.dif10+support.dif21+loneliness.dif21+phq.dif21, data = dfwide) %>% summary()
+lmer(support~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(eq5d~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(eq5dvas~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(isi~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
+lmer(gad~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
+lmer(loneliness~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(loneliness_emo~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(loneliness_soc~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
 
-lmer(meaning~ 1+date+CD+moca+ (1| case_id) ,
-     REML = TRUE, data = df, ) %>% summary()
+df$support_ <- car::recode(df$support, "1 = 0; 2 = 1")
+glmer_fit <- glmer(support_~ 1+age_group+female+CD+time*meaning+ (1| case_id), family = binomial, data = df) 
+summary(glmer_fit) 
 
-lmer(EQ5D~ 1+date+CD+CD:covid+ (1| case_id) ,
-     REML = TRUE, data = df, ) %>% summary()
+df$isi_group_ <- car::recode(df$isi_group, "c(1,2) = 0; c(3,4) = 1")
+df$gad_group_ <- car::recode(df$gad_group, "c(1,2) = 0; c(3,4) = 1")
+
+library(mixor)
+df <- df[order(df$case_id),]
+df <- droplevels(df) # drop unused levels
+mixor_fit <- mixor(loneliness_emo ~  1+age_group+female+CD+time*meaning ,
+                   data = df, id = case_id, link = "logit") 
+summary(mixor_fit)
+
+library(ordinal) # clm
+count <- 2 # starting at 2 due to 1 sometimes would give erroneous highly significant p-value results
+clmm_fit <- clmm(as.factor(support) ~ 1+age_group+female+CD+time*meaning + (1 | case_id), 
+                 data = df, link="logit", Hess=TRUE, nAGQ=count) 
+summary(clmm_fit)
+
+library(multgee)
+multgee_fit <- ordLORgee(support ~ 1+age_group+female+CD+time*meaning ,
+                         data = df, id = case_id, repeated = time,  link = "logit") 
+summary(multgee_fit)
+
+# library(repolr)
+# df <- df[order(df$time),]
+# repolr(ordered(support) ~ 1,
+#        subjects="case_id", data=na.omit(df), times=c(1,2,3), categories=3) %>% summary()
+
+# library(geepack)
+# df <- df[order(df$support),]
+# ordgee(ordered(support) ~ 1+age_group+female+CD+time*meaning,
+#        id = case_id, data = df_) %>% summary()
+
+# library(MCMCglmm)
+# df_ <- df %>% filter(!is.na(support) & !is.na(age_group) & !is.na(female) & !is.na(CD) & !is.na(time) & !is.na(meaning))
+# mcmcglmm_fit <- MCMCglmm(support ~ 1+age_group+female+CD+time*meaning,
+#                          data = df_, random = ~case_id,  family = "ordinal")
+# summary(mcmcglmm_fit)
+
+lmer(meaning~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
+lmer(eq5d~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
+lmer(isi~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df[df$time>=1,], ) %>% summary() 
+lmer(gad~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df[df$time>=1,], ) %>% summary() 
+lmer(loneliness~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
+lmer(loneliness_emo~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
+lmer(loneliness_soc~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
 
 nlme::lme(EQ5D~ 1+time+meaning+meaning:covid+support+support:covid+CD+CD:covid, random =~ 1 | case_id, 
                  nlme::corAR1(form = ~ 1 | case_id),
@@ -199,35 +251,60 @@ lm(meaning.2~ 1+meaning.1+age.2+female+cssa+alone+support.1+support.2, data = df
 # LM charts ----
 ggline(df, x = "time", y = "mci", add = "mean_ci") # %>% ggpar(ylim = c(0, 5.5))
 
-ggerrorplot(df, x = "time", y = "support",
+ggerrorplot(df, x = "time", y = "meaning",
             desc_stat = "mean_ci"
             , add = "mean", error.plot = "errorbar"
+            , facet.by = c("female", "age_group")
 ) # %>% ggpar(ylim = c(0, 5.5))
 
-ggplot(df, aes(x=time, y=meaning, color=support, shape=support)) +
+ggplot(df, aes(x=meaning, y=support, color=time, shape=time)) +
   # geom_point() +
-  geom_smooth(method=lm, aes(fill=support))
+  labs(x = "Meaning in life", y = "Social Support") +
+    geom_smooth(method=lm, aes(fill=time))
+
+ggplot(df, aes(x=support, y=meaning, color=time, shape=time)) +
+  # geom_point() +
+  labs(x = "Social Support", y = "Meaning in life") +
+  geom_smooth(method=lm, aes(fill=time))
+
+ggplot(df, aes(x=meaning, y=eq5d, color=time, shape=time)) +
+  # geom_point() +
+  labs(x = "Meaning in life", y = "Health-related quality of life (EQ5D-5L)") +
+  geom_smooth(method=lm, aes(fill=time))
 
 ggplot(df, aes(x=meaning, y=eq5dvas, color=time, shape=time)) +
   # geom_point() +
+  labs(x = "Meaning in life", y = "Health-related quality of life (EQ-VAS)") +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=meaning, color=time, shape=time)) +
+ggplot(df %>% filter(time >= 1), aes(x=meaning, y=isi, color=time, shape=time)) +
   # geom_point() +
+  labs(x = "Meaning in life", y = "Insomnia (ISI)") +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=support, color=time, shape=time)) +
+ggplot(df %>% filter(time >= 1), aes(x=meaning, y=gad, color=time, shape=time)) +
   # geom_point() +
+  labs(x = "Meaning in life", y = "Stress (GAD-7)") +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=eq5d, color=time, shape=time)) +
+ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness, color=time, shape=time)) +
   # geom_point() +
-  labs(x = "Number of chronic conditions", y = "EQ5D-5L Score") +
+  labs(x = "Meaning in life", y = "Loneliness (DJG)") +
   geom_smooth(method=lm, aes(fill=time))
 
-ggplot(df, aes(x=CD, y=eq5dvas, color=time, shape=time)) +
+ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness_emo, color=time, shape=time)) +
   # geom_point() +
-  labs(x = "Number of chronic conditions", y = "EQ-VAS") +
+  labs(x = "Meaning in life", y = "Emotional loneliness (DJG)") +
+  geom_smooth(method=lm, aes(fill=time))
+
+ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness_soc, color=time, shape=time)) +
+  # geom_point() +
+  labs(x = "Meaning in life", y = "Social loneliness (DJG)") +
+  geom_smooth(method=lm, aes(fill=time))
+
+ggplot(df %>% filter(time >= 0), aes(x=meaning, y=phq, color=time, shape=time)) +
+  # geom_point() +
+  labs(x = "Meaning in life", y = "Depression (PHQ)") +
   geom_smooth(method=lm, aes(fill=time))
 
 ggplot(df, aes(x=date, y=time, color=time, shape=time)) +
