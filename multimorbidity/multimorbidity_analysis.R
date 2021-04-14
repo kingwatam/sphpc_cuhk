@@ -12,9 +12,11 @@ library(ggplot2)
 library(ggpubr) # ggerrorplot
 
 setwd(sprintf("~%s/multimorbidity", setpath))
-df <- readRDS("JC_covid_data_long.rds")
+# df <- readRDS("JC_covid_data_long.rds")
 # write.csv(df, file = "JC_covid_data_long.csv")
-dfwide <- readRDS("JC_covid_data_wide.rds")
+# dfwide <- readRDS("JC_covid_data_wide.rds")
+df <- readRDS("t0t1t2_data.rds")
+dfwide <- readRDS("t0t1t2_data_wide.rds")
 
 # df$efs4_hist2 <- car::recode(df$efs4_hist, "
 # c('000', '111', '222') = 'No change';
@@ -32,7 +34,197 @@ df$covid <- if_else(df$time == 2, 1, 0)
 df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 dfwide$age_group.2 <- recode_age(dfwide$age.2, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 
-# main analysis ----
+# preliminary analysis ----
+reg_table <- function(data){
+  table <- data.frame(matrix(ncol = 4,  nrow = 0))
+  row_count <- 1
+  col_count <- 2
+  
+  for (dep_var in c("sar_score.0", "sar_score.1", "sar_score.2")){
+    
+    for (var in c("moca.0", "moca.1")){
+      
+      if (!(var %in% unlist(table[1]))){
+        table[row_count, 1] <- var
+      } else {
+        row_count <- match(var, unlist(table[1]))
+      }
+      
+      print(paste(dep_var, var))
+      
+      colnames(table)[col_count] <- dep_var
+      
+      age_var <- paste0("age_group.", substr(dep_var, nchar(dep_var), nchar(dep_var)))
+      
+      iferror(fit <- eval_(
+        "lm(", dep_var, "~", age_var, "+", "female+CD+", var, ", data = data)"
+      ), next)
+      
+      n <- iferror(nobs(fit), NA)
+      beta <- iferror(summary(fit)$coef[var, 1], NA)
+      se <-  iferror(summary(fit)$coef[var, 2], NA)
+      lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
+      upperCI <- iferror(beta + qnorm(0.975) * se, NA)
+      p_value <- iferror(summary(fit)$coef[var, 4], NA)
+      
+      # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
+      table[row_count, col_count] <-  starred_p(p_value, 3, beta)
+      
+      row_count <- row_count + 1
+      
+    }
+    col_count <- col_count + 1
+  }
+  return(table)
+}
+
+gen_table <- function(fit){
+  table <- data.frame(matrix(ncol = 2,  nrow = 0))
+  row_count <- 1
+  col_count <- 2
+  
+  dep_var <- as.character(formula(fit)[2])
+  
+  if (!is.null(summary(fit)$isLmer)){
+    n <- iferror(nobs(fit), NA)
+    n_unique <- iferror(summary(fit)$ngrps, NA)
+    table[row_count, 1] <- "N (unique)"
+    table[row_count, col_count] <-  paste0(n, " (", n_unique, ")")
+    row_count <- row_count + 1
+    
+  } else {
+    n <- iferror(nobs(fit), NA)
+    table[row_count, 1] <- "N"
+    table[row_count, col_count] <-  n
+    row_count <- row_count + 1
+    
+  }
+  
+  for (var in row.names(summary(fit)$coef)){
+    
+    if (!(var %in% unlist(table[1]))){
+      table[row_count, 1] <- var
+      if (grepl("age_group.", var, fixed = TRUE)){
+        var_name <- substr(var, nchar("age_group.")+2, nchar(var))
+        table[row_count, 1] <- var_name
+      } else if (grepl("age_group", var, fixed = TRUE)){
+        var_name <- substr(var, nchar("age_group")+1, nchar(var))
+        table[row_count, 1] <- var_name
+      }
+    } else {
+      row_count <- match(var, unlist(table[1]))
+    }
+    
+    print(paste(dep_var, var))
+    
+    colnames(table)[col_count] <- dep_var
+    
+    beta <- iferror(summary(fit)$coef[var, 1], NA)
+    se <-  iferror(summary(fit)$coef[var, 2], NA)
+    lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
+    upperCI <- iferror(beta + qnorm(0.975) * se, NA)
+    if (!is.null(summary(fit)$isLmer)){
+      p_value <- iferror(summary(fit)$coef[var, 5], NA)
+    } else {
+      p_value <- iferror(summary(fit)$coef[var, 4], NA)
+    }
+    
+    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
+    table[row_count, col_count] <-  starred_p(p_value, 4, beta)
+    
+    row_count <- row_count + 1
+    
+  }
+  col_count <- col_count + 1
+  return(table)
+}
+
+combind_tables <- function(table, ...){
+  for (i in 1:length(list(...))){
+    new_table <- gen_table(list(...)[[i]]) 
+    dep_vars <- names(table)
+    dep_var <- names(new_table)[2]
+    names(table) <- c("X1",rep(2:ncol(table)))
+    table <- plyr::join(table, new_table, by=c("X1"), type="full")
+    names(table) <- c(dep_vars, dep_var)
+  }
+  return(table)
+}
+
+# sar_score as dependent variable
+table <- gen_table(lm(sar_score.0~ 1+age_group.0+female+CD+moca.0, data = dfwide))
+table <- combind_tables(table,
+                        lm(sar_score.1~ 1+age_group.1+female+CD+moca.1, data = dfwide),
+                        lm(sar_score.1~ 1+age_group.1+female+CD+sar_score.0+moca.1, data = dfwide),
+                        lm(sar_score.1~ 1+age_group.1+female+CD+moca.0, data = dfwide),
+                        lm(sar_score.1~ 1+age_group.1+female+CD+sar_score.0+moca.0, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+moca.1, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+sar_score.0+moca.1, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+sar_score.1+moca.1, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+moca.0, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+sar_score.0+moca.0, data = dfwide),
+                        lm(sar_score.2~ 1+age_group.2+female+CD+sar_score.1+moca.0, data = dfwide) 
+)
+
+# moca as dependent variable
+table <- gen_table(lm(moca.0~ 1+age_group.0+female+CD+ sar_score.0, data = dfwide) )
+table <- combind_tables(table,
+                        lm(moca.1~ 1+age_group.1+female+CD+sar_score.1, data = dfwide),
+                        lm(moca.1~ 1+age_group.1+female+CD+moca.0+sar_score.1, data = dfwide),
+                        lm(moca.1~ 1+age_group.1+female+CD+sar_score.0, data = dfwide),
+                        lm(moca.1~ 1+age_group.1+female+CD+moca.0+sar_score.0, data = dfwide)
+)
+
+# longitudinal
+table <- gen_table(lmer(sar_score~ 1+age_group+female+CD+moca+ (1| case_id) , REML = TRUE, data = df))
+table <- combind_tables(table,
+                        lmer(moca~ 1+age_group+female+CD+sar_score+ (1| case_id) , REML = TRUE, data = df)
+)
+
+# binary SARC-F & binary/categorical MCI
+dfwide$mci.0 <- relevel(as.factor(dfwide$mci.0),ref="None") # for categorical MCI
+dfwide$mci.1 <- relevel(as.factor(dfwide$mci.1),ref="None") # for categorical MCI
+
+table <- gen_table(glm(sar.0~1+age_group.0+female+CD+mci.0, family = binomial, data =  dfwide))
+table <- combind_tables(table,
+                        glm(sar.1~1+age_group.1+female+CD+mci.1, family = binomial, data =  dfwide),
+                        glm(sar.1~1+age_group.1+female+CD+sar.0+mci.1, family = binomial, data =  dfwide),
+                        glm(sar.1~1+age_group.1+female+CD+mci.0, family = binomial, data =  dfwide),
+                        glm(sar.1~1+age_group.1+female+CD+sar.0+mci.0, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+mci.1, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+sar.1+mci.1, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+sar.0+mci.1, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+mci.0, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+sar.1+mci.0, family = binomial, data =  dfwide),
+                        glm(sar.2~1+age_group.2+female+CD+sar.0+mci.0, family = binomial, data =  dfwide)
+)
+
+# binary MCI as dependent variable
+table <- gen_table(glm(mci.0~1+age_group.0+female+CD+sar.0, family = binomial, data =  dfwide))
+table <- combind_tables(table,
+                        glm(mci.1~1+age_group.1+female+CD+sar.1, family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.1+female+CD+mci.0+sar.1, family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.1+female+CD+sar.0, family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.1+female+CD+mci.0+sar.0, family = binomial, data =  dfwide)
+)
+
+table %>% clipr::write_clip()
+
+df$time <- relevel(as.factor(df$time), ref = "1")
+lmer(support~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(eq5d~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(eq5dvas~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(isi~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
+lmer(gad~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
+lmer(loneliness~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(loneliness_emo~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+lmer(loneliness_soc~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
+
+df$support_ <- car::recode(df$support, "1 = 0; 2 = 1")
+glmer_fit <- glmer(support_~ 1+age_group+female+CD+time*meaning+ (1| case_id), family = binomial, data = df) 
+summary(glmer_fit) 
+
+# exploratory analysis (legacy) ----
 reg_table <- function(data){
   table <- data.frame(matrix(ncol = 15,  nrow = 0))
   row_count <- 1

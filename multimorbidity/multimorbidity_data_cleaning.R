@@ -14,7 +14,194 @@ library(ggpubr) # ggerrorplot
 library(eq5d)
 
 setwd(sprintf("~%s/multimorbidity", setpath))
+categorical_MCI <- TRUE  # set binary or categorical MCI
 
+# # data cleaning based on data used for COVID paper (without some obs from baseline) ----
+# df <- haven::read_sav("JC_covid_data_Jul_Wide_20200728.sav")
+# t0t1 <- foreign_to_labelled(haven::read_sav("jc_acitivity_FU1 2019Mar26 v2.sav", encoding = "MS936"))
+# 
+# df <- merge(df, t0t1[, c("case_id", "efs4f0", "MOCA_total_bl", "MOCA_totalf1")], # extract social support item matched by case ID
+#             by=c("case_id"), all.x = TRUE) # MOCA_total_bl & MOCA_totalf0 are identical
+# 
+# df$support_f0 <- car::recode(to_character(df$efs4f0), "
+# 'Always' = 1;
+# 'Sometimes' = 1; 
+# 'Never' = 2
+# ")
+# 
+# df$efs4f0 <- car::recode(to_character(df$efs4f0), "
+# 'Always' = 0;
+# 'Sometimes' = 1; 
+# 'Never' = 2
+# ")
+# 
+# df$MOCA_total_tel <- NA
+# 
+# df <- df[, c("case_id",
+#              "datef0", "datef1", "date_tel",
+#              "agef0", "agef1", "age_tel",
+#              "Female", "CD",
+#              "eduless6", "notmarried", "alone", "unemployed", "cssa", "somkef0", "drinkf0", 
+#              "EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel", 
+#              "eq5d6_bl", "eq5d6f1", "eq5d6tel",
+#              "support_f0", "support_f1", "support_tel", # truncated support variable 
+#              "efs4f0", "efs4f1", "EFS4tel",  
+#              "meaning_bl", "meaningf1", "meaningtel",
+#              "Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel", 
+#              "Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel",
+#              "Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel",
+#              "GAD_bl", "gadf1", "gad_total_tel", 
+#              "GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel", 
+#              "ISI_bl", "isif1", "isi_total_tel",
+#              "ISI_group_bl", "ISI_groupf1", "isi_gp_tel",
+#              "PHQ_bl", "phqf1", "phq_total_tel", 
+#              "PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel", 
+#              "MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel",
+#              "SAR_total_bl", "SAR_totalf1", "sar_total_tel")]
+# 
+# 
+# names(df)[names(df) == "Female"]  <- "female"
+# 
+# # fix mis-coding in PHQ groups
+# df$PHQ9_group_bl <- car::recode(df$PHQ_bl, "
+# 0:4 = 1;
+# 5:9 = 2;
+# 10:14 = 3;
+# 15:19 = 4;
+# 20:hi = 5
+# ")
+# df$PHQ9_groupf1 <- car::recode(df$phqf1, "
+# 0:4 = 1;
+# 5:9 = 2;
+# 10:14 = 3;
+# 15:19 = 4;
+# 20:hi = 5
+# ")
+# df$phq_gp_tel <- car::recode(df$phq_total_tel, "
+# 0:4 = 1;
+# 5:9 = 2;
+# 10:14 = 3;
+# 15:19 = 4;
+# 20:hi = 5
+# ")
+# 
+# # fix mis-coding in ISI groups
+# df$ISI_group_bl <- car::recode(df$ISI_bl, "
+# 0:7 = 1;
+# 8:14 = 2;
+# 15:21 = 3;
+# 22:hi = 4
+# ")
+# 
+# df$ISI_groupf1 <- car::recode(df$isif1, "
+# 0:7 = 1;
+# 8:14 = 2;
+# 15:21 = 3;
+# 22:hi = 4
+# ")
+# 
+# df$isi_gp_tel <- car::recode(df$isi_total_tel, "
+# 0:7 = 1;
+# 8:14 = 2;
+# 15:21 = 3;
+# 22:hi = 4
+# ")
+# 
+# df[, c("efs4f0", "efs4f1", "EFS4tel")] <- sapply(df[, c("efs4f0", "efs4f1", "EFS4tel")], function(x){(as.numeric(x)-2)*-1}) # reverse code from 0:2 to 2:0
+# df$efs4f0 <- car::recode(df$efs4f0, # ad-hoc fix for strange behaviour for efs4f0
+#                          "
+# -1 = 0;
+# 0 = 1;
+# 1 = 2
+# ")
+# 
+# # # create history of social support changes 
+# # df$efs4_hist <- ifelse(df$efs4f0 %in% NA | df$efs4f1 %in% NA | df$EFS4tel %in% NA, NA,
+# #                        paste(df$efs4f0, df$efs4f1, df$EFS4tel, sep = ""))
+# 
+# # from wide to long
+# df <- reshape(as.data.frame(df), 
+#               direction = "long", 
+#               idvar = "case_id", 
+#               varying = list(c("datef0", "datef1", "date_tel"),
+#                              c("agef0", "agef1", "age_tel"),
+#                              c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel"),
+#                              c("eq5d6_bl", "eq5d6f1", "eq5d6tel"),
+#                              c("support_f0", "support_f1", "support_tel"),
+#                              c("efs4f0", "efs4f1", "EFS4tel"), 
+#                              c("meaning_bl", "meaningf1", "meaningtel"), 
+#                              c("Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel"), 
+#                              c("Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel"),
+#                              c("Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel"),
+#                              c("GAD_bl", "gadf1", "gad_total_tel"), 
+#                              c("GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel"), 
+#                              c("ISI_bl", "isif1", "isi_total_tel"),
+#                              c("ISI_group_bl", "ISI_groupf1", "isi_gp_tel"),
+#                              c("PHQ_bl", "phqf1", "phq_total_tel"), 
+#                              c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
+#                              c("MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel"),
+#                              c("SAR_total_bl", "SAR_totalf1", "sar_total_tel")
+#               ), 
+#               v.names=c("date", 
+#                         "age", 
+#                         "eq5d",
+#                         "eq5dvas",
+#                         "support", 
+#                         "efs4", 
+#                         "meaning",
+#                         "loneliness",
+#                         "loneliness_emo",
+#                         "loneliness_soc",
+#                         "gad",
+#                         "gad_group",
+#                         "isi",
+#                         "isi_group",
+#                         "phq", 
+#                         "phq_group",
+#                         "moca",
+#                         "sar"), 
+#               timevar="time",
+#               times=c("0", "1", "2")) 
+# 
+# df$mci <- ifelse((df$moca < 21 & df$eduless6 == 1) | 
+#                    (df$moca < 22 & df$eduless6 %in% c(0, NA)), 1,
+#                  ifelse(df$moca %in% NA, NA, 0))
+# 
+# df$support <- (as.numeric(df$support)-2)*-1 # from 2=never;1=always/sometimes to 0=never;1=always/sometimes
+# df$support <- df$efs4
+# 
+# df$efs4 <- car::recode(df$efs4, "
+# 2 = 'Always';
+# 1 = 'Sometimes';
+# 0 = 'Never'
+# ")
+# 
+# df[, c("support", "meaning")] <- sapply(df[, c("support", "meaning")], function(x){as.numeric(x)}) 
+# # from long to wide
+# dfwide <- reshape(data=df, idvar= c("case_id"),
+#                   timevar = "time",
+#                   v.names=c("date", 
+#                             "age", 
+#                             "eq5d",
+#                             "eq5dvas",
+#                             "support", 
+#                             "efs4", 
+#                             "meaning",
+#                             "loneliness",
+#                             "loneliness_emo",
+#                             "loneliness_soc",
+#                             "gad",
+#                             "gad_group",
+#                             "isi",
+#                             "isi_group",
+#                             "phq", 
+#                             "phq_group",
+#                             "moca", "mci",
+#                             "sar"), 
+#                   direction="wide")
+# 
+# saveRDS(df, file = "JC_covid_data_long.rds")
+# saveRDS(dfwide, file = "JC_covid_data_wide.rds")
 # # data clean T2 data ----
 # t2 <- xlsx::read.xlsx2("2016-2019 JC project-follow-up II (Responses)_king.xlsx", sheetName  = "Form responses 1"
 #                        , encoding = "UTF-8"
@@ -154,14 +341,64 @@ rm(temp)
 
 df$MOCA_totalf2 <- NA
 df$agef0 <- as.numeric(df$age) 
-df$agef2 <- ifelse(is.na(df$agef2), as.numeric(df$Age), df$agef2) 
+df$agef2 <- as.numeric(df$Age) # use raw values instead
 # df$agef2 <- ifelse(df$agef2 < df$agef0, 
 #                    df$agef0 + round((df$Date.of.assessment. - df$datef0)/365.2422)
 #                                     , df$agef2) # four errors where agef2 is lower than agef0
-df$agef1 <- ifelse(is.na(df$agef1), df$agef0 + round((df$agef2-df$agef0)*as.vector(df$datef1 - df$datef0)/as.vector(df$Date.of.assessment. - df$datef0)),
-                   df$agef1)# age imputation using survey dates (n=15)
+# df$agef1 <- ifelse(is.na(df$agef1), df$agef0 + round((df$agef2-df$agef0)*as.vector(df$datef1 - df$datef0)/as.vector(df$Date.of.assessment. - df$datef0)),
+#                    df$agef1)# age interpolated between T0 & T2 ages and survey dates
+df$agef1 <- df$agef0 + round((df$datef1-df$datef0)/365.2422)
+df$agef1 <- ifelse(is.na(df$datef1), NA, df$agef1) # remove calculated age if survey data for T1 isn't available
+df$agef0[df$sopd == "GLYH0611542N"] <- 76
+df$agef1[df$sopd == "GLYH0611542N"] <- 78
 
-df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", 
+df$agef0[df$sopd == "FMC21016164U"] <- 67
+df$agef1[df$sopd == "FMC21016164U"] <- 69
+
+df$agef0[df$sopd == "GLYH0916389P"] <- 65
+df$agef1[df$sopd == "GLYH0916389P"] <- 66
+df$agef2[df$sopd == "GLYH0916389P"] <- 68
+
+# # generate Excel file for problematic age values
+# temp <- df
+# names(temp)[names(temp) == "Age"] <- "agef2_raw"
+# names(temp)[names(temp) == "Date.of.assessment."] <- "datef2"
+# temp$agef1minusf0 <- temp$agef1 - temp$agef0
+# temp$agef2minusf0 <- temp$agef2 - temp$agef0
+# temp$agef2minusf1 <- temp$agef2 - temp$agef1
+# temp$agef2minusf2_raw <- temp$agef2 - as.numeric(temp$agef2_raw)
+# temp <- temp[temp$cohort == 1, ] # remove <60yo or number of chronic disease < 2, and duplicates
+# 
+# write_excel("data_excerpt.xlsx", temp[, c("case_id", "sopd", "initialf0",
+#                                           "datef0", "agef0", "datef1", "agef1", "datef2", "agef2", "agef2_raw",
+#                                           "agef1minusf0", "agef2minusf0", "agef2minusf1", "agef2minusf2_raw"
+#                                           )])
+# rm(temp)
+
+if (categorical_MCI){
+  df <- df %>%
+    mutate(mcif0 = case_when(
+      MOCA_total_bl > 26 ~ "None",
+      MOCA_total_bl >= 15 & MOCA_total_bl <= 26 ~ "Moderate",
+      MOCA_total_bl < 15 ~ "Severe"
+    ))
+  df <- df %>%
+    mutate(mcif1 = case_when(
+      MOCA_totalf1 > 26 ~ "None",
+      MOCA_totalf1 >= 15 & MOCA_totalf1 <= 26 ~ "Moderate",
+      MOCA_totalf1 < 15 ~ "Severe"
+    ))
+} else{
+  df$mcif0 <- ifelse(df$MOCA_total_bl %in% NA, NA,
+                     ifelse(df$MOCA_total_bl >= 22, 0, 1))
+  df$mcif1 <- ifelse(df$MOCA_totalf1 %in% NA, NA,
+                     ifelse(df$MOCA_totalf1 >= 22, 0, 1))
+}
+
+
+df$mcif2 <- NA
+
+df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort",
                                   c("datef0", "datef1", "Date.of.assessment."),
                                   c("agef0", "agef1", "agef2"),
                                   c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_HKf2"),
@@ -179,7 +416,8 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0",
                                   c("PHQ_bl", "PHQf1", "phqf2"), 
                                   # c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
                                   c("MOCA_total_bl", "MOCA_totalf1", "MOCA_totalf2"),
-                                  c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2"))]), 
+                                  c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2"),
+                                  c("mcif0", "mcif1", "mcif2"))]), 
               direction = "long", 
               idvar = "case_id", 
               varying = list(c("datef0", "datef1", "Date.of.assessment."),
@@ -199,7 +437,8 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0",
                              c("PHQ_bl", "PHQf1", "phqf2"), 
                              # c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
                              c("MOCA_total_bl", "MOCA_totalf1", "MOCA_totalf2"),
-                             c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2")
+                             c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2"), 
+                             c("mcif0", "mcif1", "mcif2")
               ), 
               v.names=c("date", 
                         "age", 
@@ -218,11 +457,13 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0",
                         "phq", 
                         # "phq_group",
                         "moca",
-                        "sar"), 
+                        "sar_score",
+                        "mci"), 
               timevar="time",
               times=c("0", "1", "2")) 
 
-# preliminary analysis ----
+# further data wrangling  ----
+df <- df[df$cohort == 1, ] # remove <60yo or number of chronic disease < 2, and duplicates
 names(df)[names(df) == "chronic_diseasef0"] <- "CD"
 df$support <- car::recode(to_character(df$efs4), "
 'Always' = 2;
@@ -236,10 +477,11 @@ df$female <- car::recode(to_character(df$gender), "
 df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 df$meaning <- as.numeric(df$meaning)
-df$time <- relevel(as.factor(df$time), ref = "1")
-df <- droplevels(df) # drop empty categories in variables
 df <- df %>% filter(age>=60 | is.na(age))
 df$eq5dvas <- as.numeric(df$eq5dvas)
+df$sar <- ifelse(df$sar_score >= 4, 1, 0)
+df$gender <- ifelse(df$female == 1, "Female", "Male")
+df <- droplevels(df) # drop empty categories in variables
 
 dfwide <- reshape(data=df, idvar= c("case_id"),
                   timevar = "time",
@@ -260,211 +502,13 @@ dfwide <- reshape(data=df, idvar= c("case_id"),
                             "phq", 
                             # "phq_group",
                             "moca",
-                            "sar",
+                            "sar_score",
+                            "mci",
                             "support",
-                            "age_group"),
+                            "age_group",
+                            "sar"),
                   direction="wide")
 
-library(lme4)
-library(lmerTest) # calculate p-values in summary()
-
-lmer(support~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5d~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5dvas~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(isi~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(gad~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(loneliness~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_emo~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_soc~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-
-
-df$support_ <- car::recode(df$support, "1 = 0; 2 = 1")
-glmer_fit <- glmer(support_~ 1+age_group+female+CD+time*meaning+ (1| case_id), family = binomial, data = df) 
-summary(glmer_fit) 
-
-# data cleaning based on data used for COVID paper (without some obs from baseline) ----
-df <- haven::read_sav("JC_covid_data_Jul_Wide_20200728.sav")
-t0t1 <- foreign_to_labelled(haven::read_sav("jc_acitivity_FU1 2019Mar26 v2.sav", encoding = "MS936"))
-
-df <- merge(df, t0t1[, c("case_id", "efs4f0", "MOCA_total_bl", "MOCA_totalf1")], # extract social support item matched by case ID
-            by=c("case_id"), all.x = TRUE) # MOCA_total_bl & MOCA_totalf0 are identical
-
-df$support_f0 <- car::recode(to_character(df$efs4f0), "
-'Always' = 1;
-'Sometimes' = 1; 
-'Never' = 2
-")
-
-df$efs4f0 <- car::recode(to_character(df$efs4f0), "
-'Always' = 0;
-'Sometimes' = 1; 
-'Never' = 2
-")
-
-df$MOCA_total_tel <- NA
-
-df <- df[, c("case_id",
-             "datef0", "datef1", "date_tel",
-             "agef0", "agef1", "age_tel",
-             "Female", "CD",
-             "eduless6", "notmarried", "alone", "unemployed", "cssa", "somkef0", "drinkf0", 
-             "EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel", 
-             "eq5d6_bl", "eq5d6f1", "eq5d6tel",
-             "support_f0", "support_f1", "support_tel", # truncated support variable 
-             "efs4f0", "efs4f1", "EFS4tel",  
-             "meaning_bl", "meaningf1", "meaningtel",
-             "Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel", 
-             "Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel",
-             "Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel",
-             "GAD_bl", "gadf1", "gad_total_tel", 
-             "GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel", 
-             "ISI_bl", "isif1", "isi_total_tel",
-             "ISI_group_bl", "ISI_groupf1", "isi_gp_tel",
-             "PHQ_bl", "phqf1", "phq_total_tel", 
-             "PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel", 
-             "MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel",
-             "SAR_total_bl", "SAR_totalf1", "sar_total_tel")]
-
-
-names(df)[names(df) == "Female"]  <- "female"
-
-# fix mis-coding in PHQ groups
-df$PHQ9_group_bl <- car::recode(df$PHQ_bl, "
-0:4 = 1;
-5:9 = 2;
-10:14 = 3;
-15:19 = 4;
-20:hi = 5
-")
-df$PHQ9_groupf1 <- car::recode(df$phqf1, "
-0:4 = 1;
-5:9 = 2;
-10:14 = 3;
-15:19 = 4;
-20:hi = 5
-")
-df$phq_gp_tel <- car::recode(df$phq_total_tel, "
-0:4 = 1;
-5:9 = 2;
-10:14 = 3;
-15:19 = 4;
-20:hi = 5
-")
-
-# fix mis-coding in ISI groups
-df$ISI_group_bl <- car::recode(df$ISI_bl, "
-0:7 = 1;
-8:14 = 2;
-15:21 = 3;
-22:hi = 4
-")
-
-df$ISI_groupf1 <- car::recode(df$isif1, "
-0:7 = 1;
-8:14 = 2;
-15:21 = 3;
-22:hi = 4
-")
-
-df$isi_gp_tel <- car::recode(df$isi_total_tel, "
-0:7 = 1;
-8:14 = 2;
-15:21 = 3;
-22:hi = 4
-")
-
-df[, c("efs4f0", "efs4f1", "EFS4tel")] <- sapply(df[, c("efs4f0", "efs4f1", "EFS4tel")], function(x){(as.numeric(x)-2)*-1}) # reverse code from 0:2 to 2:0
-df$efs4f0 <- car::recode(df$efs4f0, # ad-hoc fix for strange behaviour for efs4f0
-                         "
--1 = 0;
-0 = 1;
-1 = 2
-")
-
-# # create history of social support changes 
-# df$efs4_hist <- ifelse(df$efs4f0 %in% NA | df$efs4f1 %in% NA | df$EFS4tel %in% NA, NA,
-#                        paste(df$efs4f0, df$efs4f1, df$EFS4tel, sep = ""))
-
-# from wide to long
-df <- reshape(as.data.frame(df), 
-              direction = "long", 
-              idvar = "case_id", 
-              varying = list(c("datef0", "datef1", "date_tel"),
-                             c("agef0", "agef1", "age_tel"),
-                             c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel"),
-                             c("eq5d6_bl", "eq5d6f1", "eq5d6tel"),
-                             c("support_f0", "support_f1", "support_tel"),
-                             c("efs4f0", "efs4f1", "EFS4tel"), 
-                             c("meaning_bl", "meaningf1", "meaningtel"), 
-                             c("Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel"), 
-                             c("Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel"),
-                             c("Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel"),
-                             c("GAD_bl", "gadf1", "gad_total_tel"), 
-                             c("GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel"), 
-                             c("ISI_bl", "isif1", "isi_total_tel"),
-                             c("ISI_group_bl", "ISI_groupf1", "isi_gp_tel"),
-                             c("PHQ_bl", "phqf1", "phq_total_tel"), 
-                             c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
-                             c("MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel"),
-                             c("SAR_total_bl", "SAR_totalf1", "sar_total_tel")
-              ), 
-              v.names=c("date", 
-                        "age", 
-                        "eq5d",
-                        "eq5dvas",
-                        "support", 
-                        "efs4", 
-                        "meaning",
-                        "loneliness",
-                        "loneliness_emo",
-                        "loneliness_soc",
-                        "gad",
-                        "gad_group",
-                        "isi",
-                        "isi_group",
-                        "phq", 
-                        "phq_group",
-                        "moca",
-                        "sar"), 
-              timevar="time",
-              times=c("0", "1", "2")) 
-
-df$mci <- ifelse((df$moca < 21 & df$eduless6 == 1) | 
-                   (df$moca < 22 & df$eduless6 %in% c(0, NA)), 1,
-                 ifelse(df$moca %in% NA, NA, 0))
-
-df$support <- (as.numeric(df$support)-2)*-1 # from 2=never;1=always/sometimes to 0=never;1=always/sometimes
-df$support <- df$efs4
-
-df$efs4 <- car::recode(df$efs4, "
-2 = 'Always';
-1 = 'Sometimes';
-0 = 'Never'
-")
-
-df[, c("support", "meaning")] <- sapply(df[, c("support", "meaning")], function(x){as.numeric(x)}) 
-# from long to wide
-dfwide <- reshape(data=df, idvar= c("case_id"),
-                  timevar = "time",
-                  v.names=c("date", 
-                            "age", 
-                            "eq5d",
-                            "eq5dvas",
-                            "support", 
-                            "efs4", 
-                            "meaning",
-                            "loneliness",
-                            "loneliness_emo",
-                            "loneliness_soc",
-                            "gad",
-                            "gad_group",
-                            "isi",
-                            "isi_group",
-                            "phq", 
-                            "phq_group",
-                            "moca", "mci",
-                            "sar"), 
-                  direction="wide")
-
-saveRDS(df, file = "JC_covid_data_long.rds")
-saveRDS(dfwide, file = "JC_covid_data_wide.rds")
+saveRDS(df, file = "t0t1t2_data.rds")
+# write_excel("t0t1t2_data.xlsx", df)
+saveRDS(dfwide, file = "t0t1t2_data_wide.rds")
