@@ -306,24 +306,24 @@ ht12 <- ht12 %>% filter(!is.na(ht30_r))
 wc12 <- wc12 %>% filter(!is.na(wc29_r))
 cc12 <- cc12 %>% filter(!is.na(cc29_r))
 
-numVars <- c("age_group", "gender", "marital", "education", "employment")
+allVars <- c("age_group", "gender", "marital", "education", "employment")
 catVars <- c("age_group", "gender", "marital", "education", "employment")
-tableone::CreateTableOne(data =  dm12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  dm12, strata = "time", vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  ht12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  ht12, strata = "time", vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  wc12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  wc12, strata = "time", vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  cc12, strata = "time", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  cc12, strata = "time", vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
-tableone::CreateTableOne(data =  dm12, vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  dm12, vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  ht12, vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  ht12, vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  wc12, vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  wc12, vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
-tableone::CreateTableOne(data =  cc12, vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  cc12, vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
 # Reliability (internal consistency) ----
