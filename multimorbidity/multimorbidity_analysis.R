@@ -10,6 +10,7 @@ library(lme4)
 library(lmerTest) # calculate p-values in summary()
 library(ggplot2)
 library(ggpubr) # ggerrorplot
+library(labelled) # 
 
 setwd(sprintf("~%s/multimorbidity", setpath))
 # df <- readRDS("JC_covid_data_long.rds")
@@ -26,13 +27,19 @@ dfwide <- readRDS("t0t1t2_data_wide.rds")
 # c('101', '102', '201', '202', '212') = 'Worse then better'
 # ")
 # df$efs4_hist2 <- relevel(as.factor(df$efs4_hist2), ref = 'No change')
-df$efs4 <- relevel(as.factor(df$efs4), ref = 'Never')
+df$efs4 <- relevel(to_factor(df$efs4), ref = 'Never')
 
 # df$time <- as.numeric(df$time)
 
 df$covid <- if_else(df$time == 2, 1, 0)
 df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 dfwide$age_group.2 <- recode_age(dfwide$age.2, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
+
+# descriptive statistics ----
+allVars <- c("age", "age_group", "gender", "CD", "meaning", "support", "eq5d", "eq5dvas", "isi", "gad", "loneliness", "loneliness_emo", "loneliness_soc")
+catVars <- c("age_group", "gender")
+tableone::CreateTableOne(data =  df, strata = "time", vars = allVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
 
 # preliminary analysis ----
 reg_table <- function(data){
@@ -147,6 +154,7 @@ combind_tables <- function(table, ...){
     names(table) <- c("X1",rep(2:ncol(table)))
     table <- plyr::join(table, new_table, by=c("X1"), type="full")
     names(table) <- c(dep_vars, dep_var)
+    names(table)[names(table) == "X1"] <- ""
   }
   return(table)
 }
