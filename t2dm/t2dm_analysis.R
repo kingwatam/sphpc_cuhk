@@ -77,7 +77,7 @@ df$male <- ifelse(df$sex == "Male", 1, 0)
 
 df$HbA1c <- ifelse(df$HbA1c == 333, 3.8, df$HbA1c) # less than 3.8% is censored 
 
-df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35a != 1, 1, 
+df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35 != 1, 1, 
                        ifelse(df$Q35a ==  1, 0, NA)) # incident cases as control
 
 df$case_prev <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35 != 1, 1, 
@@ -370,5 +370,5 @@ table <- explore_var(df)
 allVars <- c("age", "age_cat", "sex", "educ", "marital", "econ", "income_num", "income_cat3", "district", "hse_income", "hse_type", "live.alone", "Family.history.DM", "health", "who_pa", "checkup", "checkup_freq")
 catVars <- c("age_cat", "sex", "educ", "marital", "econ", "income_cat3", "district", "hse_income", "hse_type", "checkup_freq")
 
-tableone::CreateTableOne(data =  df, strata = "case_prev", vars = allVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  df, strata = "case_inc", vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
