@@ -14,7 +14,6 @@ library(ggpubr) # ggerrorplot
 library(eq5d)
 
 setwd(sprintf("~%s/multimorbidity", setpath))
-categorical_MCI <- TRUE  # set binary or categorical MCI
 
 # # data cleaning based on data used for COVID paper (without some obs from baseline) ----
 # df <- haven::read_sav("JC_covid_data_Jul_Wide_20200728.sav")
@@ -25,13 +24,13 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 # 
 # df$support_f0 <- car::recode(to_character(df$efs4f0), "
 # 'Always' = 1;
-# 'Sometimes' = 1; 
+# 'Sometimes' = 1;
 # 'Never' = 2
 # ")
 # 
 # df$efs4f0 <- car::recode(to_character(df$efs4f0), "
 # 'Always' = 0;
-# 'Sometimes' = 1; 
+# 'Sometimes' = 1;
 # 'Never' = 2
 # ")
 # 
@@ -41,21 +40,21 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 #              "datef0", "datef1", "date_tel",
 #              "agef0", "agef1", "age_tel",
 #              "Female", "CD",
-#              "eduless6", "notmarried", "alone", "unemployed", "cssa", "somkef0", "drinkf0", 
-#              "EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel", 
+#              "eduless6", "notmarried", "alone", "unemployed", "cssa", "somkef0", "drinkf0",
+#              "EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel",
 #              "eq5d6_bl", "eq5d6f1", "eq5d6tel",
-#              "support_f0", "support_f1", "support_tel", # truncated support variable 
-#              "efs4f0", "efs4f1", "EFS4tel",  
+#              "support_f0", "support_f1", "support_tel", # truncated support variable
+#              "efs4f0", "efs4f1", "EFS4tel",
 #              "meaning_bl", "meaningf1", "meaningtel",
-#              "Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel", 
+#              "Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel",
 #              "Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel",
 #              "Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel",
-#              "GAD_bl", "gadf1", "gad_total_tel", 
-#              "GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel", 
+#              "GAD_bl", "gadf1", "gad_total_tel",
+#              "GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel",
 #              "ISI_bl", "isif1", "isi_total_tel",
 #              "ISI_group_bl", "ISI_groupf1", "isi_gp_tel",
-#              "PHQ_bl", "phqf1", "phq_total_tel", 
-#              "PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel", 
+#              "PHQ_bl", "phqf1", "phq_total_tel",
+#              "PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel",
 #              "MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel",
 #              "SAR_total_bl", "SAR_totalf1", "sar_total_tel")]
 # 
@@ -115,39 +114,39 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 # 1 = 2
 # ")
 # 
-# # # create history of social support changes 
+# # # create history of social support changes
 # # df$efs4_hist <- ifelse(df$efs4f0 %in% NA | df$efs4f1 %in% NA | df$EFS4tel %in% NA, NA,
 # #                        paste(df$efs4f0, df$efs4f1, df$EFS4tel, sep = ""))
 # 
 # # from wide to long
-# df <- reshape(as.data.frame(df), 
-#               direction = "long", 
-#               idvar = "case_id", 
+# df <- reshape(as.data.frame(df),
+#               direction = "long",
+#               idvar = "case_id",
 #               varying = list(c("datef0", "datef1", "date_tel"),
 #                              c("agef0", "agef1", "age_tel"),
 #                              c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_index_tel"),
 #                              c("eq5d6_bl", "eq5d6f1", "eq5d6tel"),
 #                              c("support_f0", "support_f1", "support_tel"),
-#                              c("efs4f0", "efs4f1", "EFS4tel"), 
-#                              c("meaning_bl", "meaningf1", "meaningtel"), 
-#                              c("Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel"), 
+#                              c("efs4f0", "efs4f1", "EFS4tel"),
+#                              c("meaning_bl", "meaningf1", "meaningtel"),
+#                              c("Loneliness_T_bl", "Loneliness_Tf1", "loneliness_total_tel"),
 #                              c("Loneliness_E_bl", "Loneliness_Ef1", "loneliness_e_tel"),
 #                              c("Loneliness_S_bl", "Loneliness_Sf1", "loneliness_s_tel"),
-#                              c("GAD_bl", "gadf1", "gad_total_tel"), 
-#                              c("GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel"), 
+#                              c("GAD_bl", "gadf1", "gad_total_tel"),
+#                              c("GAD7_group_bl", "GAD7_groupf1", "gad_gp_tel"),
 #                              c("ISI_bl", "isif1", "isi_total_tel"),
 #                              c("ISI_group_bl", "ISI_groupf1", "isi_gp_tel"),
-#                              c("PHQ_bl", "phqf1", "phq_total_tel"), 
-#                              c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
+#                              c("PHQ_bl", "phqf1", "phq_total_tel"),
+#                              c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"),
 #                              c("MOCA_total_bl", "MOCA_totalf1", "MOCA_total_tel"),
 #                              c("SAR_total_bl", "SAR_totalf1", "sar_total_tel")
-#               ), 
-#               v.names=c("date", 
-#                         "age", 
+#               ),
+#               v.names=c("date",
+#                         "age",
 #                         "eq5d",
 #                         "eq5dvas",
-#                         "support", 
-#                         "efs4", 
+#                         "support",
+#                         "efs4",
 #                         "meaning",
 #                         "loneliness",
 #                         "loneliness_emo",
@@ -156,16 +155,15 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 #                         "gad_group",
 #                         "isi",
 #                         "isi_group",
-#                         "phq", 
+#                         "phq",
 #                         "phq_group",
 #                         "moca",
-#                         "sar"), 
+#                         "sar"),
 #               timevar="time",
-#               times=c("0", "1", "2")) 
+#               times=c("0", "1", "2"))
 # 
-# df$mci <- ifelse((df$moca < 21 & df$eduless6 == 1) | 
-#                    (df$moca < 22 & df$eduless6 %in% c(0, NA)), 1,
-#                  ifelse(df$moca %in% NA, NA, 0))
+# df$mci <- ifelse(df$moca %in% NA, NA,
+#                  ifelse(df$moca >= 22, 0, 1))
 # 
 # df$support <- (as.numeric(df$support)-2)*-1 # from 2=never;1=always/sometimes to 0=never;1=always/sometimes
 # df$support <- df$efs4
@@ -176,16 +174,16 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 # 0 = 'Never'
 # ")
 # 
-# df[, c("support", "meaning")] <- sapply(df[, c("support", "meaning")], function(x){as.numeric(x)}) 
+# df[, c("support", "meaning")] <- sapply(df[, c("support", "meaning")], function(x){as.numeric(x)})
 # # from long to wide
 # dfwide <- reshape(data=df, idvar= c("case_id"),
 #                   timevar = "time",
-#                   v.names=c("date", 
-#                             "age", 
+#                   v.names=c("date",
+#                             "age",
 #                             "eq5d",
 #                             "eq5dvas",
-#                             "support", 
-#                             "efs4", 
+#                             "support",
+#                             "efs4",
 #                             "meaning",
 #                             "loneliness",
 #                             "loneliness_emo",
@@ -194,14 +192,15 @@ categorical_MCI <- TRUE  # set binary or categorical MCI
 #                             "gad_group",
 #                             "isi",
 #                             "isi_group",
-#                             "phq", 
+#                             "phq",
 #                             "phq_group",
 #                             "moca", "mci",
-#                             "sar"), 
+#                             "sar"),
 #                   direction="wide")
 # 
 # saveRDS(df, file = "JC_covid_data_long.rds")
 # saveRDS(dfwide, file = "JC_covid_data_wide.rds")
+
 # # data clean T2 data ----
 # t2 <- xlsx::read.xlsx2("2016-2019 JC project-follow-up II (Responses)_king.xlsx", sheetName  = "Form responses 1"
 #                        , encoding = "UTF-8"
@@ -375,30 +374,40 @@ df$agef2[df$sopd == "GLYH0916389P"] <- 68
 #                                           )])
 # rm(temp)
 
-if (categorical_MCI){
-  df <- df %>%
-    mutate(mcif0 = case_when(
-      MOCA_total_bl > 26 ~ "None",
-      MOCA_total_bl >= 15 & MOCA_total_bl <= 26 ~ "Moderate",
-      MOCA_total_bl < 15 ~ "Severe"
-    ))
-  df <- df %>%
-    mutate(mcif1 = case_when(
-      MOCA_totalf1 > 26 ~ "None",
-      MOCA_totalf1 >= 15 & MOCA_totalf1 <= 26 ~ "Moderate",
-      MOCA_totalf1 < 15 ~ "Severe"
-    ))
-} else{
-  df$mcif0 <- ifelse(df$MOCA_total_bl %in% NA, NA,
-                     ifelse(df$MOCA_total_bl >= 22, 0, 1))
-  df$mcif1 <- ifelse(df$MOCA_totalf1 %in% NA, NA,
-                     ifelse(df$MOCA_totalf1 >= 22, 0, 1))
-}
+df <- df %>%
+  mutate(mci_catf0 = case_when(
+    MOCA_total_bl > 26 ~ "None",
+    MOCA_total_bl >= 15 & MOCA_total_bl <= 26 ~ "Moderate",
+    MOCA_total_bl < 15 ~ "Severe"
+  ))
+df <- df %>%
+  mutate(mci_catf1 = case_when(
+    MOCA_totalf1 > 26 ~ "None",
+    MOCA_totalf1 >= 15 & MOCA_totalf1 <= 26 ~ "Moderate",
+    MOCA_totalf1 < 15 ~ "Severe"
+  ))
+df$mci_catf2 <- NA
 
-
+df$mcif0 <- ifelse(df$MOCA_total_bl %in% NA, NA,
+                   ifelse(df$MOCA_total_bl >= 22, 0, 1))
+df$mcif1 <- ifelse(df$MOCA_totalf1 %in% NA, NA,
+                   ifelse(df$MOCA_totalf1 >= 22, 0, 1))
 df$mcif2 <- NA
 
-df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort",
+df$hgs1f2 <- NA
+df$hgs2f2 <- NA
+df$hgs3f2 <- NA
+df$hgs4f2 <- NA
+
+df$EFS_totalf2 <- NA
+df$FS_totalf1 <- NA
+df$FS_totalf2 <- NA
+
+df$BMIf2 <- NA
+
+df$waistf2 <- NA
+
+df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort", "eduf0", "smokef0", "alcoholf0", "audit2xf0", 
                                   c("datef0", "datef1", "Date.of.assessment."),
                                   c("agef0", "agef1", "agef2"),
                                   c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_HKf2"),
@@ -417,7 +426,21 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort",
                                   # c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
                                   c("MOCA_total_bl", "MOCA_totalf1", "MOCA_totalf2"),
                                   c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2"),
-                                  c("mcif0", "mcif1", "mcif2"))]), 
+                                  c("sar1f0", "sar1f1", "sar1f2"),
+                                  c("sar2f0", "sar2f1", "sar2f2"),
+                                  c("sar3f0", "sar3f1", "sar3f2"),
+                                  c("sar4f0", "sar4f1", "sar4f2"),
+                                  c("sar5f0", "sar5f1", "sar5f2"),
+                                  c("hgs1f0", "hgs1f1", "hgs1f2"),
+                                  c("hgs2f0", "hgs2f1", "hgs2f2"),
+                                  c("hgs3f0", "hgs3f1", "hgs3f2"),
+                                  c("hgs4f0", "hgs4f1", "hgs4f2"),
+                                  c("mcif0", "mcif1", "mcif2"),
+                                  c("mci_catf0", "mci_catf1", "mci_catf2"),
+                                  c("EFS_totalf0", "EFS_totalf1", "EFS_totalf2"),
+                                  c("FS_totalf0", "FS_totalf1", "FS_totalf2"),
+                                  c("BMIf0", "BMIf1", "BMIf2"),
+                                  c("waistf0", "waistf1", "waistf2"))]), 
               direction = "long", 
               idvar = "case_id", 
               varying = list(c("datef0", "datef1", "Date.of.assessment."),
@@ -438,7 +461,21 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort",
                              # c("PHQ9_group_bl", "PHQ9_groupf1", "phq_gp_tel"), 
                              c("MOCA_total_bl", "MOCA_totalf1", "MOCA_totalf2"),
                              c("SAR_total_bl", "SAR_totalf1", "SAR_totalf2"), 
-                             c("mcif0", "mcif1", "mcif2")
+                             c("sar1f0", "sar1f1", "sar1f2"),
+                             c("sar2f0", "sar2f1", "sar2f2"),
+                             c("sar3f0", "sar3f1", "sar3f2"),
+                             c("sar4f0", "sar4f1", "sar4f2"),
+                             c("sar5f0", "sar5f1", "sar5f2"),
+                             c("hgs1f0", "hgs1f1", "hgs1f2"),
+                             c("hgs2f0", "hgs2f1", "hgs2f2"),
+                             c("hgs3f0", "hgs3f1", "hgs3f2"),
+                             c("hgs4f0", "hgs4f1", "hgs4f2"),
+                             c("mcif0", "mcif1", "mcif2"),
+                             c("mci_catf0", "mci_catf1", "mci_catf2"),
+                             c("EFS_totalf0", "EFS_totalf1", "EFS_totalf2"),
+                             c("FS_totalf0", "FS_totalf1", "FS_totalf2"),
+                             c("BMIf0", "BMIf1", "BMIf2"),
+                             c("waistf0", "waistf1", "waistf2")
               ), 
               v.names=c("date", 
                         "age", 
@@ -457,10 +494,32 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort",
                         "phq", 
                         # "phq_group",
                         "moca",
-                        "sar_score",
-                        "mci"), 
+                        "sarc_f",
+                        "sar1",
+                        "sar2",
+                        "sar3",
+                        "sar4",
+                        "sar5",
+                        "hgs1", # first measurement of hand-grip strength of left hand
+                        "hgs2", # second measurement of hand-grip strength of left hand
+                        "hgs3", # first measurement of hand-grip strength of right hand
+                        "hgs4", # first measurement of hand-grip strength of right hand
+                        "mci",
+                        "mci_cat",
+                        "efs",
+                        "fs", 
+                        "bmi",
+                        "waist"), 
               timevar="time",
               times=c("0", "1", "2")) 
+
+df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
+df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
+df$hgs <- pmax(df$hgs_l, df$hgs_r) # average hand-grip strength
+df$gender <- to_factor(df$gender)
+df$sar_hgs <- ifelse(is.na(df$hgs) | is.na(df$gender) | is.na(df$sarc_f), NA, 
+                     ifelse(df$hgs < 28 & df$gender == "Male" & df$sarc_f >= 4 , 1, 
+                            ifelse(df$hgs < 18 & df$gender == "Female"  & df$sarc_f >= 4, 1, 0)))
 
 # further data wrangling  ----
 df <- df[df$cohort == 1, ] # remove <60yo or number of chronic disease < 2, and duplicates
@@ -479,7 +538,7 @@ df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 df$meaning <- as.numeric(df$meaning)
 df <- df %>% filter(age>=60 | is.na(age))
 df$eq5dvas <- as.numeric(df$eq5dvas)
-df$sar <- ifelse(df$sar_score >= 4, 1, 0)
+df$sar <- ifelse(df$sarc_f >= 4, 1, 0)
 df$gender <- ifelse(df$female == 1, "Female", "Male")
 df <- droplevels(df) # drop empty categories in variables
 
@@ -502,8 +561,26 @@ dfwide <- reshape(data=df, idvar= c("case_id"),
                             "phq", 
                             # "phq_group",
                             "moca",
-                            "sar_score",
-                            "mci",
+                            "sarc_f",
+                            "sar1",
+                            "sar2",
+                            "sar3",
+                            "sar4",
+                            "sar5",
+                            "hgs1", # first measurement of hand-grip strength of left hand
+                            "hgs2", # second measurement of hand-grip strength of left hand
+                            "hgs3", # first measurement of hand-grip strength of right hand
+                            "hgs4", # second measurement of hand-grip strength of right hand
+                            "hgs_l",
+                            "hgs_r",
+                            "hgs",
+                            "sar_hgs",
+                            "mci", 
+                            "mci_cat",
+                            "efs",
+                            "fs",
+                            "waist",
+                            "bmi",
                             "support",
                             "age_group",
                             "sar"),
