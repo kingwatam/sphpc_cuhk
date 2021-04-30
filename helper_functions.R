@@ -8,8 +8,8 @@
 ##
 ## Notes:
 ## summ() & tab() work like sum & tab functions in Stata
-## summ() e.g. summ(df$var1, df$var2, ...) or summ(df1, df2, ....) or sum(df$var1, df2)
-## tab() e.g. tab(df$var1, df$var2, df$var3….)
+## summ() e.g. summ(df$var1, df$var2, ...) or summ(df1, df2, ...) or sum(df$var1, df2)
+## tab() e.g. tab(df$var1, df$var2, df$var3...)
 ## round_format(value, decimal_places =  2, check_object = FALSE) 
 ## starred_p(p_value, decimal_places, related_value = NULL)
 ## recode_age(var, age_labels = NULL, second_group = 25, interval = 5, last_group = 65) recodes age into age groups - either arbitrary age groups by providing age_lables or by a fixed interval. 
@@ -329,11 +329,6 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   }
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
-
-
-
-
-
 
 # robust SEs for lm()
 # import the function from repository
