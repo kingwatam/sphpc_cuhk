@@ -15,6 +15,7 @@
 ## recode_age(var, age_labels = NULL, second_group = 25, interval = 5, last_group = 65) recodes age into age groups - either arbitrary age groups by providing age_lables or by a fixed interval. 
 #### Default values are equivalent to using age_labels = c("0-24", "25-29" ,"30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65+") 
 #### Otherwise, skip the age_labels option by specifying the second group starting age, and fixed interval and the last group starting age, i.e. recode_age(df$age, , 25, 5, 65). 
+## eq5d_fast implements a highly efficient version of calculating eq5d based on the original package, with constant running time versus linear time
 ## import_func() imports only functions from another R script, analagous to the base source() function but ignores non-functions inside the script
 ## write_excel() writes tables as multiple sheets in an Excel file
 ## iferror() works like the iferror function in Excel
@@ -169,6 +170,63 @@ recode_age <- function(var, age_labels = NULL, second_group = 25, interval = 5, 
       cut(as.integer(var), breaks = c(as.vector(as.numeric(before_char(age_labels, "-|+"))), Inf), labels = age_labels, right = FALSE)
     )
   }
+}
+
+eq5d_fast <- function(scores, country, version, type, ignore.invalid){
+  require(eq5d)
+  
+  if (length(scores) <= 20){ # faster to use original eq5d function when n < 20
+    return(eq5d(scores=scores, country=country, version=version, type=type, ignore.invalid=ignore.invalid))
+  }
+  
+  eq5d_mobility <- c(0)
+  for (i in 2:5){
+    enum <- i
+    temp_score <- sprintf("%s1111", enum)
+    eq5d_mobility <- c(eq5d_mobility, 
+                       1-eq5d(scores=temp_score, country=country, version=version, type=type, ignore.invalid = ignore.invalid))
+  }
+  eq5d_selfcare <- c(0)
+  for (i in 2:5){
+    enum <- i
+    temp_score <- sprintf("1%s111", enum)
+    eq5d_selfcare <- c(eq5d_selfcare, 
+                       1-eq5d(scores=temp_score, country=country, version=version, type=type, ignore.invalid = ignore.invalid))
+  }
+  eq5d_activity <- c(0)
+  for (i in 2:5){
+    enum <- i
+    temp_score <- sprintf("11%s11", enum)
+    eq5d_activity <- c(eq5d_activity, 
+                       1-eq5d(scores=temp_score, country=country, version=version, type=type, ignore.invalid = ignore.invalid))
+  }
+  eq5d_pain <- c(0)
+  for (i in 2:5){
+    enum <- i
+    temp_score <- sprintf("111%s1", enum)
+    eq5d_pain <- c(eq5d_pain, 
+                   1-eq5d(scores=temp_score, country=country, version=version, type=type, ignore.invalid = ignore.invalid))
+  } 
+  eq5d_anxiety <- c(0)
+  for (i in 2:5){
+    enum <- i
+    temp_score <- sprintf("1111%s", enum)
+    eq5d_anxiety <- c(eq5d_anxiety, 
+                      1-eq5d(scores=temp_score, country=country, version=version, type=type, ignore.invalid = ignore.invalid))
+  } 
+  sum_scores <- c()
+  for (score_i in scores){
+    if (is.na(score_i)){
+      sum_scores <- c(sum_scores, NA)
+    } else {
+    sum_scores <- c(sum_scores,
+                    1- (eq5d_mobility[as.numeric(substr(score_i,1,1))] + eq5d_selfcare[as.numeric(substr(score_i,2,2))] + 
+                          eq5d_activity[as.numeric(substr(score_i,3,3))] + eq5d_pain[as.numeric(substr(score_i,4,4))] + 
+                          eq5d_anxiety[as.numeric(substr(score_i,5,5))])
+    )
+    }
+  }
+  return(sum_scores)
 }
 
 import_func <- function(R_file){
