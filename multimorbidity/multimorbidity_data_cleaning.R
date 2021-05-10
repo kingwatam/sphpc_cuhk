@@ -338,6 +338,8 @@ df <- merge(df, temp[, c("case_id", "agef1", "agef2")], # extract item matched b
             by=c("case_id"), all.x = TRUE)
 rm(temp)
 
+
+df$eduf0[which(df$eduf0 == 55)] <- 5 # appears to be incorrect entry
 df$MOCA_totalf2 <- NA
 df$agef0 <- as.numeric(df$age) 
 df$agef2 <- as.numeric(df$Age) # use raw values instead
@@ -407,7 +409,15 @@ df$BMIf2 <- NA
 
 df$waistf2 <- NA
 
-df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort", "eduf0", "smokef0", "alcoholf0", "audit2xf0", 
+names(df)[names(df) == "md1f0"] <- "htf0"
+names(df)[names(df) == "md2f0"] <- "dyslipf0"
+names(df)[names(df) == "md3f0"] <- "dmf0"
+names(df)[names(df) == "msd1f0"] <- "chronicpainf0"
+df$chronicpainf0 <- ifelse(df$chronicpainf0 >= 1, 1, 0)
+names(df)[names(df) == "msd2f0"] <- "inflamf0"
+
+df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort", "eduf0", "smokef0", "alcoholf0", "audit2xf0",
+                                   "htf0", "dyslipf0", "dmf0", "chronicpainf0", "inflamf0", "medicationf0", "workf0", "marriagef0",
                                   c("datef0", "datef1", "Date.of.assessment."),
                                   c("agef0", "agef1", "agef2"),
                                   c("EQ5D_HK_bl", "EQ5D_HKf1", "EQ5D_HKf2"),
