@@ -30,51 +30,70 @@
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
-sum_func <- function(x, var_name) { # sum_func() is used inside summ()
+sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ()
   argx <- var_name
   if (is.factor(x)){
     x <- as.numeric(x)
   }
+  if (showClass){
+    sumx <- suppressWarnings(data.frame("Name"=argx, 
+                                        Class=class(x)[1],
+                                        Type=typeof(x)[1], 
+                                        N=length(na.omit(x)), # not including missing values
+                                        Mean=iferror(mean(x, na.rm = TRUE), NA), # not including missing values
+                                        # Median=median(x, na.rm = TRUE),
+                                        SD=iferror(sd(x, na.rm = TRUE), NA),
+                                        Min=iferror(min(x, na.rm = TRUE), NA),
+                                        Max=iferror(max(x, na.rm = TRUE), NA)
+    ))
+  } else {
+    sumx <- suppressWarnings(data.frame("Name"=argx, 
+                                        N=length(na.omit(x)), # not including missing values
+                                        Mean=iferror(mean(x, na.rm = TRUE), NA), # not including missing values
+                                        # Median=median(x, na.rm = TRUE),
+                                        SD=iferror(sd(x, na.rm = TRUE), NA),
+                                        Min=iferror(min(x, na.rm = TRUE), NA),
+                                        Max=iferror(max(x, na.rm = TRUE), NA)
+    ))
+  }
 
-  sumx <- suppressWarnings(data.frame("Name"=argx, 
-                                      N=length(na.omit(x)), # not including missing values
-                                      Mean=iferror(mean(x, na.rm = TRUE), NA), # not including missing values
-                                      # Median=median(x, na.rm = TRUE),
-                                      SD=iferror(sd(x, na.rm = TRUE), NA),
-                                      Min=iferror(min(x, na.rm = TRUE), NA),
-                                      Max=iferror(max(x, na.rm = TRUE), NA)
-                                      ))
   if (var_name == "X[[i]]"){
     sumx <- sumx[2:length(sumx)]
   }
   return(sumx)
 }
 
-summ <- function(...) { # summ(df$var1, df$var2, ...) or summ(df1, df2, ....) or sum(df$var1, df2)
+summ <- function(..., showClass = FALSE) { # summ(df$var1, df$var2, ...) or summ(df1, df2, ....) or sum(df$var1, df2)
   require(dplyr)
-  n_args <- nargs()
   arg <- substitute(list(...))
   arg_values <- list(...)
+  n_args <- length(arg_values)
+  if ((isTRUE(arg_values[[n_args]]) |
+             isFALSE(arg_values[[n_args]])) & # without explicit mention of showClass in last arg if arg is TRUE/FALSE 
+      n_args == nargs()) {
+    showClass = arg_values[[n_args]]
+    n_args <- n_args -1
+  }
   if (is.data.frame(arg_values[[1]])){
-    summary <- suppressWarnings(t(sapply(arg_values[[1]], summ)))
+    summary <- suppressWarnings(t(sapply(arg_values[[1]], summ, showClass=showClass)))
     summary <- as.data.frame(summary)
     summary$Name <- rownames(summary)
     summary <- summary %>%  select("Name", everything())
     } else {
-    summary <- sum_func(arg_values[[1]], deparse(arg[[2]]))
+    summary <- sum_func(arg_values[[1]], deparse(arg[[2]]), showClass)
   }
   if (n_args>1) {
     for (i in 2:n_args) {
       x <- i+1
       if (is.data.frame(arg_values[[i]])){
-        sum_i <- suppressWarnings(t(sapply(arg_values[[i]], summ)))
+        sum_i <- suppressWarnings(t(sapply(arg_values[[i]], summ, showClass=showClass)))
         sum_i <- as.data.frame(sum_i)
         sum_i$Name <- rownames(sum_i)
         sum_i <- sum_i %>% as.data.frame() %>% select("Name", everything())
         summary <- rbind(summary, sum_i)
       }
       else {
-        sum_i <- sum_func(arg_values[[i]], deparse(arg[[x]]))
+        sum_i <- sum_func(arg_values[[i]], deparse(arg[[x]]), showClass)
         summary <- rbind(summary, sum_i)
       }
     }
