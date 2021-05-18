@@ -113,10 +113,15 @@ tab <- function(...){
   # d <- data.frame(.x, .y, .z)
   if (n_args <= 1){
     Freq <- rep("N",length(arg_values[[1]]))
+    trycatch_({
     newTab <- eval_(sprintf("xtabs(~ %s + Freq, addNA = TRUE)", paste(arg, collapse = " + ")))
     names(dimnames(newTab))[1] <- after_dollarsign(arg[1])
     names(dimnames(newTab))[2] <- "" # this must take place before ftable() otherwise dimnames are NULL
-    newTab <- ftable(addmargins(newTab, 1, FUN = list(Total=sum), quiet = TRUE)) 
+    }, # error is produced when using pipes (%>%)
+    {
+    df <- data.frame(. = arg_values[[1]], Freq =  Freq)
+    newTab <- ftable(addmargins(xtabs(~ . , data = df, addNA = TRUE), 1, FUN = list(Total=sum), quiet = TRUE))
+    })
     return(newTab)
   }
   newTab <- eval_(sprintf("xtabs(~ %s, addNA = TRUE)", paste(arg, collapse = " + ")))
