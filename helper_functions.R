@@ -56,7 +56,6 @@ sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ(
                                         Max=iferror(max(x, na.rm = TRUE), NA)
     ))
   }
-
   if (var_name == "X[[i]]"){
     sumx <- sumx[2:length(sumx)]
   }
@@ -117,6 +116,7 @@ tab <- function(...){
     newTab <- eval_(sprintf("xtabs(~ %s + Freq, addNA = TRUE)", paste(arg, collapse = " + ")))
     names(dimnames(newTab))[1] <- after_dollarsign(arg[1])
     names(dimnames(newTab))[2] <- "" # this must take place before ftable() otherwise dimnames are NULL
+    newTab <- ftable(addmargins(newTab, 1, FUN = list(Total=sum), quiet = TRUE))
     }, # error is produced when using pipes (%>%)
     {
     df <- data.frame(. = arg_values[[1]], Freq =  Freq)
