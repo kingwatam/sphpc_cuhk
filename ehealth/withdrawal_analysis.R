@@ -8,7 +8,7 @@ source("helper_functions.R")
 library(dplyr)
 library(labelled)
 
-setwd(sprintf("~%s/wbs", setpath))
+setwd(sprintf("~%s/ehealth/wbs", setpath))
 # # merge datasets ----
 # df <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-03-27_update.xlsx", sheetName  = "Raw data"
 #                        , encoding = "UTF-8"
