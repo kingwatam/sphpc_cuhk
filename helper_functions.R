@@ -25,6 +25,7 @@
 ## convert2value() replaces certain values with any single value
 ## after_dollarsign() returns string after dollar sign
 ## after_char() and before_char() return string after/before a given character
+## between_char() returns middle section of string between two characters of first occurrence
 ## get_freqtable() returns up to 3-way frequency table as a data frame
 ## eval_() simplifies eval(parse()) globally, while concatenating strings so that paste/sprintf functions are not needed. Beware of certain problems since it evaluates objects from the global environment
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
@@ -358,6 +359,12 @@ after_char <- function(x, char) {
 
 before_char <- function(x, char) {
   return(substring(x, 1, regexpr(paste0("[", char,"]"), x)-1))
+}
+
+between_char <- function(x, first_char, second_char){
+  x <- after_char(x, first_char) # remove junk before first char
+  x <- before_char(x, second_char)
+  return(x)
 }
 
 get_freqtable <- function(x, y=NULL, z=NULL){
