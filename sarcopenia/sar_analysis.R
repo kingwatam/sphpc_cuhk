@@ -108,7 +108,11 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     colnames(table)[col_count] <- dep_var
     
     beta <- iferror(summary(fit)$coef[var, 1], NA)
-    se <-  iferror(summary(fit)$coef[var, 2], NA)
+    if (class(fit)[1] %in% "coxph"){
+      se <-  iferror(summary(fit)$coef[var, 3], NA)
+    } else {
+      se <-  iferror(summary(fit)$coef[var, 2], NA)
+    }
     lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
     upperCI <- iferror(beta + qnorm(0.975) * se, NA)
     p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
@@ -301,7 +305,11 @@ hist2 <- ggplot(dfwide, aes(x=sarc_f.0)) + geom_histogram() + xlab(varlist[varli
 hist5 <- ggplot(dfwide, aes(x=sarc_f.1)) + geom_histogram() + xlab(varlist[varlist$V1=="sarc_f.1",2])
 hist3 <- ggplot(dfwide, aes(x=hgs.0)) + geom_histogram() + xlab(varlist[varlist$V1=="hgs.0",2])
 hist6 <- ggplot(dfwide, aes(x=hgs.1)) + geom_histogram() + xlab(varlist[varlist$V1=="hgs.1",2])
-hist1 + hist2 + hist3 + hist4 + hist5 + hist6 
+histograms <- hist1 + hist2 + hist3 + hist4 + hist5 + hist6 
+print(histograms)
+# setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
+# ggsave("hist.png", plot = histograms, height =  28, width =  50, units = "cm", dpi = 300)
+# dev.off()
 
 # functions to generate plots ----
 get_plot_main <- function(df, x, y, xlab, ylab, jitter_w = 0, jitter_h = 0, 
@@ -344,7 +352,11 @@ plot3 <- get_plot(dfwide,
 plot4 <- get_plot(dfwide, 
                         x = "moca.1", y = "hgs.1",
                         jitter_w = 0.25, jitter_h = 0)
-plot1+plot2+plot3+plot4
+scatterplots <- plot1+plot2+plot3+plot4
+print(scatterplots)
+# setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
+# ggsave("scatter.png", plot = scatterplots, height =  28, width =  50, units = "cm", dpi = 300)
+# dev.off()
 
 plot5 <- get_plot(dfwide, 
                         x = "moca.0", y = "sarc_f.1",
@@ -468,11 +480,22 @@ table %>% clipr::write_clip()
 dfwide$time <- as.numeric(dfwide$date.1-dfwide$date.0)
 table <- combind_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
+                        show_CI = TRUE,
                         exponentiate = TRUE, 
                         coxph(Surv(time, mci.1) ~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.0, data =  dfwide),
                         coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.1, data =  dfwide),
                         coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+hgs.0, data =  dfwide),
                         coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+hgs.1, data =  dfwide)
+)
+# standardized
+table <- combind_tables(NULL,
+                        # adjusted_r2 = FALSE, show_p = TRUE, 
+                        show_CI = TRUE,
+                        exponentiate = TRUE, 
+                        coxph(Surv(time, mci.1) ~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(sarc_f.0), data =  dfwide),
+                        coxph(Surv(time, mci.1)~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(sarc_f.1), data =  dfwide),
+                        coxph(Surv(time, mci.1)~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(hgs.0), data =  dfwide),
+                        coxph(Surv(time, mci.1)~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(hgs.1), data =  dfwide)
 )
 
 # scaled Schoenfeld residuals to test proportional-hazards assumption
