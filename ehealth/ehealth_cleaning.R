@@ -169,6 +169,54 @@ df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 
 df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
 
+# extract recording duration data ----
+# remotes::install_github("jmgirard/tidymedia")
+# install mediainfo & ffmpeg (ref: https://github.com/jmgirard/tidymedia/)
+library(parallel)
+Sys.setlocale(locale =  "eng")
+setwd("C:/Users/tamkingwa/OneDrive - The Chinese University of Hong Kong")
+audio <- as.data.frame(list.files(pattern = "", recursive = TRUE))
+names(audio)[names(audio) == 'list.files(pattern = "", recursive = TRUE)'] <- "path"
+
+audio$path <- gsub("AKAé¦™æ¸¯ä»”åŠæœƒ", "AKA香港仔坊會", audio$path)
+audio$path <- gsub("CARæ˜Žæ„›", "CAR明愛", audio$path)
+audio$path <- gsub("CRCç¦®è³¢æœƒ", "CRC禮賢會", audio$path)
+audio$path <- gsub("FWCå®¶ç¦æœƒ", "FWC家福會", audio$path)
+audio$path <- gsub("HOHéˆå¯¦", "HOH靈實", audio$path)
+# HUB賽馬會流金匯
+audio$path <- gsub("LMCè–å…¬æœƒéº¥ç†æµ©", "LMC聖公會麥理浩", audio$path)
+audio$path <- gsub("LSSè·¯å¾·æœƒ", "LSS路德會", audio$path)
+audio$path <- gsub("NAAé„°èˆ", "NAA鄰舍", audio$path)
+audio$path <- gsub("POHåšæ„›", "POH博愛", audio$path)
+audio$path <- gsub("SAGè€†åº·æœƒ", "SAG耆康會", audio$path)
+audio$path <- gsub("SJSè–é›…å„", "SJS聖雅各", audio$path)
+audio$path <- gsub("SKCå—è‘µæ¶Œç¤¾æœƒæœå‹™è™•", "SKC南葵涌社會服務處", audio$path)
+audio$path <- gsub("SKHè–å…¬æœƒ", "SKH聖公會", audio$path)
+audio$path <- gsub("SSYå—‡è‰²åœ’", "SSY嗇色園", audio$path)
+audio$path <- gsub("YCHä»æ¿Ÿ", "YCH仁濟", audio$path)
+audio$path <- gsub("YWCåŸºç£æ•™å¥³é’å¹´æœƒ", "YWC基督教女青年會", audio$path)
+
+audio$path <- gsub("éœ€å†æ‰“", "需再打", audio$path)
+audio$path <- gsub("å””å¾—é–’", "唔得閒", audio$path)
+audio$path <- gsub("æœªèƒ½å®Œæˆå£é.­åŒæ„éŒ„éŸ³", "未能完成口頭同意錄音", audio$path)
+audio$path <- gsub("æŽé.†è‹±", "李順英", audio$path) # replaced problematic empty character in the middle with "." for any character in regex
+audio$path <- gsub("éœ€å†è‡´é›»", "需再致電", audio$path)
+audio$path <- gsub("å†ç´„æ™‚é–“", "再約時間", audio$path)
+audio$path <- gsub("å¥³å…’ä»£ç­”", "女兒代答", audio$path)
+
+audio <- audio %>% filter(!grepl(".ini", audio[,1], ignore.case = TRUE)) # exclude non audio files (not mp3|wav|mov|m4a|etc)
+audio$filename <- basename(audio$path)
+audio$member_id <- before_char(audio$filename, "-|_") 
+audio$member_id <- after_char(audio$member_id, ")")
+audio$member_id <- ifelse(!grepl("\\D", audio$member_id), 
+                               between_char(audio$filename, "-", "-"), 
+                               audio$member_id) # replace dates with member ID
+
+cl <- makeCluster(24) # using 24 instances/clusters yield over 10x speedup (12 threads)
+audio$duration <- parSapply(cl, audio$path, tidymedia::get_duration, unit = "min")
+stopCluster(cl)
+
+# save data ----
 setwd(sprintf("~%s/ehealth", setpath))
 saveRDS(df, "ehealth_data.rds")
 saveRDS(wbs, "wbs_data.rds")
