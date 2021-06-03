@@ -6,4 +6,5 @@
 !LICENSE
 bert/functions/
 ehealth/raw_data
+ehealth/rename_interviewer.R
 .Rproj.user
