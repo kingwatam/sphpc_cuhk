@@ -162,14 +162,17 @@ to_English <- function(df){
   var <- "diet_dp1"
   df[[var]] <- to_labelled(to_factor(df[[var]]))
   valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "每餐約小半碗或以下"),
+  label_order <- c(which(names(valLabels) == "每餐0碗"),
+                   which(names(valLabels) == "每餐約小半碗或以下"),
                    which(names(valLabels) == "每餐約半碗"),
                    which(names(valLabels) == "每餐約大半碗至1碗"),
                    which(names(valLabels) == "每餐多於1碗"))
+  
   names(valLabels)[names(valLabels) == "每餐多於1碗"] <- "> 1 bowl"
   names(valLabels)[names(valLabels) == "每餐約大半碗至1碗"] <- "0.5-1 bowl"
   names(valLabels)[names(valLabels) == "每餐約小半碗或以下"] <- "< 0.5 bowl"
   names(valLabels)[names(valLabels) == "每餐約半碗"] <- "0.5 bowl"
+  names(valLabels)[names(valLabels) == "每餐0碗"] <- "None"
   val_labels(df[[var]]) <- valLabels[label_order]
   df[[var]] <- to_factor(df[[var]])
   
@@ -239,8 +242,8 @@ catVars <- c("amic",
              "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_12_1", 
              "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
              "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5")
-tableone::CreateTableOne(data =  to_English(to_character_df(df, catVars)), 
-                         # strata = c(""),
+tableone::CreateTableOne(data =  to_English(to_character_df(df, catVars)) %>% filter(time==0), 
+                         # strata = c("time"),
                          vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE)  %>% clipr::write_clip() # %>% writeClipboard(format = 13)
 
