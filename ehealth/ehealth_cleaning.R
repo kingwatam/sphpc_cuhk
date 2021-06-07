@@ -41,11 +41,11 @@ df$ehealth_eval_timestamp[df$record_id %in% df$record_id[df$ehealth_eval_timesta
   c("2020-10-15 15:01:00", "2020-10-15 15:45:00", "2020-10-15 16:20:00", "2020-10-16 10:00:00")
 
 # fix problematic member IDs
-gsub("\t", "", "\tSAG03M223")
+# gsub("\t", "", "\tSAG03M223")
 df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)] <- 
   gsub("\t", "", df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)]) # remove "\t"
 
-df$ehealth_eval_timestamp <- as.Date(df$ehealth_eval_timestamp)
+df$ehealth_eval_timestamp <- lubridate::ymd_hms(df$ehealth_eval_timestamp, tz = "Asia/Hong_Kong", quiet =  TRUE)
 
 # # examine duplicates
 # wbs %>%
