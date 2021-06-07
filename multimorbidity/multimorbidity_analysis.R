@@ -337,7 +337,7 @@ ggplot(df, aes(x=date, y=time, color=time, shape=time)) +
   # geom_point() +
   geom_smooth(method=lm, aes(fill=time))
 
-# plot data collection dates
+# plot data collection dates ----
 ggplot(df, aes(x=date, y=time)) + 
   geom_point() + 
   scale_x_date(date_breaks = "3 month", date_minor_breaks = "1 month", date_labels="%b/%Y") +
