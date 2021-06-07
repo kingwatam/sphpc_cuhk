@@ -507,6 +507,32 @@ survminer::ggcoxzph(cox.zph(coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf
 coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.0, data =  dfwide, robust = TRUE) %>% summary()
 coxphw::coxphw(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.0, template = "PH", data =  dfwide, robust = TRUE) %>% summary()
 
+# variance analysis ----
+
+test_var <- function(data, var, var2, center){
+  sample1 <- data[[var]][data[[var2]] < 22]
+  sample2 <- data[[var]][data[[var2]] >= 22]
+  new_data <- c(sample1 = sample1, sample2 = sample2)
+  group <- as.factor(c(rep(1, length(sample1)), rep(2, length(sample2))))
+  print(var(sample1, na.rm = TRUE))
+  print(var(sample2, na.rm = TRUE))
+  return(car::leveneTest(new_data, group, center = center))
+}
+test_var(dfwide, "sarc_f.0", "moca.0", center = mean) %>% clipr::write_clip()
+test_var(dfwide, "sarc_f.1", "moca.1", center = mean) %>% clipr::write_clip()
+
+dflong <-  reshape(as.data.frame(dfwide),
+                               direction = "long",
+                               idvar = "case_id",
+                               timevar="time",
+                               times=c("0", "1", "2"))
+dflong <- dflong %>% filter(time %in% 0:1)
+test_var(dflong, "sarc_f", "moca", center = median) %>% clipr::write_clip()
+test_var(dfwide, "hgs.0", "moca.0", center = median) %>% clipr::write_clip()
+test_var(dfwide, "hgs.1", "moca.1", center = median) %>% clipr::write_clip()
+test_var(dflong, "hgs", "moca", center = median) %>% clipr::write_clip()
+
+
 ### exploratory analysis ----
 # baseline vs change ----
 get_plot(dfwide, 
