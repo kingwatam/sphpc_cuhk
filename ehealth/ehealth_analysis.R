@@ -27,7 +27,7 @@ df %>% select(starts_with("diet_")) %>% colnames(.) -> diet_
 df %>% select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 
 # restrict sample to age >= 60 ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-05-30'),]
+# df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-05-30'),]
 df <- df[which(df$age >= 60),]
 
 df$time <- car::recode(df$evaluation_event, "
@@ -417,7 +417,8 @@ for (var in allVars){
     labs(x = "Time", y = var_names[which(var_names==var),2], color = "Time point") +
     geom_line() +
     scale_x_date(date_breaks = "1 month", date_labels="%b %Y") +
-    theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1))
+    theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1)) +
+    ylim(min(as.numeric(df[[var]]), na.rm=TRUE),max(test$y, na.rm=TRUE))
   print(plot)
 }
 dev.off()
