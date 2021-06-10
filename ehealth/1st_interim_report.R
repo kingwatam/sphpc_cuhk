@@ -22,6 +22,15 @@ df %>% select(starts_with("matrix_diet")) %>% colnames(.) -> matrix_diet_
 df %>% select(starts_with("diet_")) %>% colnames(.) -> diet_
 df %>% select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 
+df$time <- car::recode(df$evaluation_event, "
+1 = 0;
+2 = NA;
+3 = 1;
+4 = 2;
+5 = 3;
+6 = NA
+")
+
 # restrict sample to January 2021 & age >= 60 ----
 df <- df[df$ehealth_eval_timestamp <= as.Date('2021-01-31'),]
 df <- df[which(df$age >= 60),]
@@ -243,7 +252,7 @@ catVars <- c("amic",
              "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
              "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5")
 tableone::CreateTableOne(data =  to_English(to_character_df(df, catVars)) %>% filter(time==0), 
-                         # strata = c("time"),
+                         # strata = c(""),
                          vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE)  %>% clipr::write_clip() # %>% writeClipboard(format = 13)
 
