@@ -190,89 +190,11 @@ df$income_cat3 <- factor(df$income_cat3, ordered = FALSE)
 
 
 # main analysis ----
-gen_table <- function(fit, exponentiate = FALSE){
-  table <- data.frame(matrix(ncol = 2,  nrow = 0))
-  row_count <- 1
-  col_count <- 2
-  
-  dep_var <- as.character(formula(fit)[2])
-  
-  if (!is.null(summary(fit)$isLmer)){
-    n <- iferror(nobs(fit), NA)
-    n_unique <- iferror(summary(fit)$ngrps, NA)
-    table[row_count, 1] <- "N (unique)"
-    table[row_count, col_count] <-  paste0(n, " (", n_unique, ")")
-    row_count <- row_count + 1
-    
-  } else {
-    n <- iferror(nobs(fit), NA)
-    table[row_count, 1] <- "N"
-    table[row_count, col_count] <-  n
-    row_count <- row_count + 1
-    
-  }
-  
-  for (var in row.names(summary(fit)$coef)){
-    
-    if (!(var %in% unlist(table[1]))){
-      table[row_count, 1] <- var
-      if (grepl("age_group.", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group.")+2, nchar(var))
-        table[row_count, 1] <- var_name
-      } else if (grepl("age_group", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group")+1, nchar(var))
-        table[row_count, 1] <- var_name
-      }
-    } else {
-      row_count <- match(var, unlist(table[1]))
-    }
-    
-    print(paste(dep_var, var))
-    
-    colnames(table)[col_count] <- dep_var
-    
-    if (exponentiate){
-      beta <- iferror(exp(summary(fit)$coef[var, 1]), NA)
-    } else {
-      beta <- iferror(summary(fit)$coef[var, 1], NA)
-      se <-  iferror(summary(fit)$coef[var, 2], NA)
-      lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
-      upperCI <- iferror(beta + qnorm(0.975) * se, NA)
-    }
-    if (!is.null(summary(fit)$isLmer)){
-      p_value <- iferror(summary(fit)$coef[var, 5], NA)
-    } else {
-      p_value <- iferror(summary(fit)$coef[var, 4], NA)
-    }
-    
-    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
-    table[row_count, col_count] <-  starred_p(p_value, 4, beta)
-    
-    row_count <- row_count + 1
-    
-  }
-  col_count <- col_count + 1
-  return(table)
-}
-
-combind_tables <- function(table, exponentiate = FALSE, ...){
-  for (i in 1:length(list(...))){
-    new_table <- gen_table(list(...)[[i]], exponentiate) 
-    dep_vars <- names(table)
-    dep_var <- names(new_table)[2]
-    names(table) <- c("X1",rep(2:ncol(table)))
-    table <- plyr::join(table, new_table, by=c("X1"), type="full")
-    names(table) <- c(dep_vars, dep_var)
-    names(table)[names(table) == "X1"] <- ""
-  }
-  return(table)
-}
-
 df <- df[df$age <= 84,] # match age range of those who took health exam
 df$econ_active <- ifelse(df$econ == "Economically active persons", 1, 0)
 
 table <- gen_table(glm(case_prev~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combind_tables(table, exponentiate = TRUE,
+table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_prev~1+age, family = binomial, data =  df),
                         glm(case_prev~1+age+male, family = binomial, data =  df),
                         glm(case_prev~1+age+male+educ, family = binomial, data =  df),
@@ -289,7 +211,7 @@ table <- combind_tables(table, exponentiate = TRUE,
 table %>% clipr::write_clip()
 
 table <- gen_table(glm(case_prev~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combind_tables(table, exponentiate = TRUE,
+table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_prev~1+age, family = binomial, data =  df),
                         glm(case_prev~1+age+male, family = binomial, data =  df),
                         glm(case_prev~1+age+male+HT_prev, family = binomial, data =  df),
@@ -307,7 +229,7 @@ table <- combind_tables(table, exponentiate = TRUE,
 )
 
 table <- gen_table(glm(case_inc~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combind_tables(table, exponentiate = TRUE,
+table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_inc~1+age, family = binomial, data =  df),
                         glm(case_inc~1+age+male, family = binomial, data =  df),
                         glm(case_inc~1+age+male+educ, family = binomial, data =  df),
@@ -323,7 +245,7 @@ table <- combind_tables(table, exponentiate = TRUE,
 )
 
 table <- gen_table(glm(case_inc~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combind_tables(table, exponentiate = TRUE,
+table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_inc~1+age, family = binomial, data =  df),
                         glm(case_inc~1+age+male, family = binomial, data =  df),
                         glm(case_inc~1+age+male+HT_prev, family = binomial, data =  df),

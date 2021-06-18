@@ -19,142 +19,6 @@ dfwide <- readRDS("t0t1t2_data_wide.rds")
 
 df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
 
-gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE){ 
-  require(lmerTest)
-  table <- data.frame(matrix(ncol = 2,  nrow = 0))
-  row_count <- 1
-  col_count <- 2
-  
-  dep_var <- as.character(formula(fit)[2])
-  
-  if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
-    n <- iferror(nobs(fit), NA)
-    n_unique <- iferror(summary(fit)$ngrps, NA)
-    table[row_count, 1] <- "N (unique)"
-    table[row_count, col_count] <-  paste0(n, " (", n_unique, ")")
-    row_count <- row_count + 1
-    
-    icc <- iferror(performance::icc(fit)[[1]], NA)
-    icc <- round_format(icc, 3)
-    table[row_count, 1] <- "ICC"
-    table[row_count, col_count] <-  icc
-    row_count <- row_count + 1
-  } else if (class(fit)[1] %in% "glm") {
-    n <- iferror(nobs(fit), NA)
-    table[row_count, 1] <- "N"
-    table[row_count, col_count] <-  n
-    row_count <- row_count + 1
-    
-    if(adjusted_r2){
-      adj_r2 <- iferror(1 - ((summary(fit)$deviance/-2)-(length(fit$coeff)-1)) / (summary(fit)$null.deviance/-2), NA)
-      adj_r2 <- round_format(adj_r2, 3)
-      table[row_count, 1] <- "Adjusted R2"
-      table[row_count, col_count] <-  adj_r2
-    } else {
-      r2 <- iferror(1 - ((summary(fit)$deviance/-2)) / (summary(fit)$null.deviance/-2), NA)
-      r2 <- round_format(r2, 3)
-      table[row_count, 1] <- "R2"
-      table[row_count, col_count] <-  r2
-    }
-    row_count <- row_count + 1
-    
-  } else if (class(fit)[1] %in% "coxph"){
-    n <- iferror(summary(fit)$n, NA)
-    table[row_count, 1] <- "N"
-    table[row_count, col_count] <-  n
-    row_count <- row_count + 1
-    
-    concordance <- iferror(round_format(summary(fit)$concordance[[1]], 3), NA)
-    table[row_count, 1] <- "Concordance"
-    table[row_count, col_count] <-  concordance
-    
-    row_count <- row_count + 1
-    
-  } else {
-    n <- iferror(nobs(fit), NA)
-    table[row_count, 1] <- "N"
-    table[row_count, col_count] <-  n
-    row_count <- row_count + 1
-    
-    if(adjusted_r2){
-      adj_r2 <- iferror(round_format(summary(fit)$adj.r.squared, 3), NA)
-      table[row_count, 1] <- "Adjusted R2"
-      table[row_count, col_count] <-  adj_r2
-    } else {
-      r2 <- iferror(round_format(summary(fit)$r.squared, 3), NA)
-      table[row_count, 1] <- "R2"
-      table[row_count, col_count] <-  r2
-    }
-    row_count <- row_count + 1
-  }
-  
-  for (var in row.names(summary(fit)$coef)){
-    
-    if (!(var %in% unlist(table[1]))){
-      table[row_count, 1] <- var
-      if (grepl("age_group.", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group.")+2, nchar(var))
-        table[row_count, 1] <- var_name
-      } else if (grepl("age_group", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group")+1, nchar(var))
-        table[row_count, 1] <- var_name
-      }
-    } else {
-      row_count <- match(var, unlist(table[1]))
-    }
-    
-    print(paste(dep_var, var))
-    
-    colnames(table)[col_count] <- dep_var
-    
-    beta <- iferror(summary(fit)$coef[var, 1], NA)
-    if (class(fit)[1] %in% "coxph"){
-      se <-  iferror(summary(fit)$coef[var, 3], NA)
-    } else {
-      se <-  iferror(summary(fit)$coef[var, 2], NA)
-    }
-    lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
-    upperCI <- iferror(beta + qnorm(0.975) * se, NA)
-    p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
-    
-    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
-    if (show_p){
-      table[row_count, col_count] <-  round_format(p_value, 4)
-    } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
-      table[row_count, col_count] <-  starred_p(p_value, 3, exp(beta))
-      if (show_CI){
-        table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), 3), ", ", round_format(exp(upperCI), 3))
-      }
-    } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
-      table[row_count, col_count] <-  paste0(round_format(lowerCI, 3), ", ", round_format(upperCI, 3))
-    } else {
-      table[row_count, col_count] <-  starred_p(p_value, 3, beta)
-    }
-    
-    row_count <- row_count + 1
-    
-  }
-  col_count <- col_count + 1
-  return(table)
-}
-
-combind_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE){
-  for (i in 1:length(list(...))){
-    if (is.null(table) & i == 1){
-      table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
-      next
-    }
-    new_table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
-    dep_vars <- names(table)
-    dep_var <- names(new_table)[2]
-    names(table) <- c("X1",rep(2:ncol(table)))
-    table <- plyr::join(table, new_table, by=c("X1"), type="full")
-    names(table) <- c(dep_vars, dep_var)
-    names(table)[names(table) == "X1"] <- ""
-  }
-  return(table)
-}
-
 dfwide$sarc_f.10 <- dfwide$sarc_f.1 - dfwide$sarc_f.0
 dfwide$sarc_f.21 <- dfwide$sarc_f.2 - dfwide$sarc_f.1
 dfwide$moca.10 <- dfwide$moca.1 - dfwide$moca.0
@@ -396,7 +260,7 @@ cor_matrix[upper.tri(cor_matrix, diag = FALSE)]<-""
 cor_matrix %>% clipr::write_clip()
 
 # regression results ----
-table <- combind_tables(NULL, 
+table <- combine_tables(NULL, 
                         show_CI = TRUE,
                         lm(sarc_f.0~ 1+age_group.0+female+CD+eduf0+moca.0, data = dfwide),
                         lm(sarc_f.1~ 1+age_group.0+female+CD+eduf0+sarc_f.0+moca.0, data = dfwide),
@@ -406,7 +270,7 @@ table <- combind_tables(NULL,
                         lm(sarc_f.1~ 1+age_group.0+female+CD+eduf0+sarc_f.0+mci.1, data = dfwide)
 )
 # standardized
-table <- combind_tables(NULL, 
+table <- combine_tables(NULL, 
                         show_CI = TRUE,
                         lm(scale(sarc_f.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0), data = dfwide),
                         lm(scale(sarc_f.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0)+scale(moca.0), data = dfwide),
@@ -417,7 +281,7 @@ table <- combind_tables(NULL,
 )
 
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         show_CI = TRUE,
                         lm(hgs.0~ 1+age_group.0+female+CD+eduf0+moca.0, data = dfwide),
                         lm(hgs.1~ 1+age_group.0+female+CD+eduf0+hgs.0+moca.0, data = dfwide),
@@ -427,7 +291,7 @@ table <- combind_tables(NULL,
                         lm(hgs.1~ 1+age_group.0+female+CD+eduf0+hgs.0+mci.1, data = dfwide)
 )
 # standardized
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         show_CI = TRUE,
                         lm(scale(hgs.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0), data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(hgs.0)+scale(moca.0), data = dfwide),
@@ -438,7 +302,7 @@ table <- combind_tables(NULL,
 )
 
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         show_CI = TRUE,
                         exponentiate = TRUE, 
                         lm(moca.0~ 1+age_group.0+female+CD+eduf0+sarc_f.0, data = dfwide),
@@ -456,7 +320,7 @@ table <- combind_tables(NULL,
                         glm(mci.1~1+age_group.0+female+CD+eduf0+mci.0+hgs.1, family = binomial, data =  dfwide)
 )
 # standardized
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         show_CI = TRUE,
                         exponentiate = TRUE, 
                         lm(scale(moca.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0), data = dfwide),
@@ -478,7 +342,7 @@ table %>% clipr::write_clip()
 
 # cox proportional hazards regression
 dfwide$time <- as.numeric(dfwide$date.1-dfwide$date.0)
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
                         show_CI = TRUE,
                         exponentiate = TRUE, 
@@ -488,7 +352,7 @@ table <- combind_tables(NULL,
                         coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+hgs.1, data =  dfwide)
 )
 # standardized
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
                         show_CI = TRUE,
                         exponentiate = TRUE, 
@@ -508,30 +372,85 @@ coxph(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.0, data =  df
 coxphw::coxphw(Surv(time, mci.1)~1+age_group.0+female+CD+eduf0+mci.0+sarc_f.0, template = "PH", data =  dfwide, robust = TRUE) %>% summary()
 
 # variance analysis ----
+model <- lm(scale(sarc_f.0)~ scale(moca.0), data = dfwide)
+sarc_f0 <- data.frame(error = model$residuals, var = dfwide$moca.0)
 
-test_var <- function(data, var, var2, center){
-  sample1 <- data[[var]][data[[var2]] < 22]
-  sample2 <- data[[var]][data[[var2]] >= 22]
+model <- lm(scale(sarc_f.0)~ scale(moca.0), data = dfwide)
+sarc_f0_ <- data.frame(predict = model$fitted.values, sarc_f.0 = dfwide$sarc_f.0, moca.0 = dfwide$moca.0)
+rsq <- function (x, y) cor(x, y) ^ 2
+
+test_var <- function(data, x1, x2, groupvar, center = median, cvtest = FALSE, sign1 = "<", sign2 = ">="){
+  sample1 <- eval(parse(text = sprintf("data[[x1]][data[[groupvar]] %s 22]", sign1)))
+  sample2 <- eval(parse(text = sprintf("data[[x2]][data[[groupvar]] %s 22]", sign2)))
   new_data <- c(sample1 = sample1, sample2 = sample2)
   group <- as.factor(c(rep(1, length(sample1)), rep(2, length(sample2))))
-  print(var(sample1, na.rm = TRUE))
-  print(var(sample2, na.rm = TRUE))
-  return(car::leveneTest(new_data, group, center = center))
-}
-test_var(dfwide, "sarc_f.0", "moca.0", center = mean) %>% clipr::write_clip()
-test_var(dfwide, "sarc_f.1", "moca.1", center = mean) %>% clipr::write_clip()
 
+  if (cvtest){
+    sd1 <- sd(sample1, na.rm = TRUE)
+    mean1 <- mean(sample1, na.rm = TRUE)
+    sd2 <- sd(sample2, na.rm = TRUE)
+    mean2 <- mean(sample2, na.rm = TRUE)
+    cv1 <- sd1/mean1
+    cv2 <- sd2/mean2
+    # print(cvequality::asymptotic_test(new_data, group))
+    mslr_results <- cvequality::mslr_test(nr = 10000, new_data, group, seed = 489411)
+    mslr_stat <- mslr_results$MSLRT
+    mslr_pval <- mslr_results$p_value
+    return(c(x1=x1, mean1=mean1, sd1=sd1, cv1 = cv1, x2=x2, mean2=mean2, sd2=sd2, cv2 = cv2, mslr_stat = mslr_stat, mslr_pval = mslr_pval))
+  } else {
+    var1 <- var(sample1, na.rm = TRUE)
+    var2 <- var(sample2, na.rm = TRUE)
+    vartest_results <- car::leveneTest(new_data, group, center = center) 
+    vartest_stat <- vartest_results[1, 2]
+    vartest_pval <- vartest_results[1, 3]
+    options(scipen = 999)
+    return(c(n1 = length(sample1), n2 = length(sample2), var1 = var1, var2 = var2, vartest_stat = vartest_stat, vartest_pval = vartest_pval))
+  }
+}
 dflong <-  reshape(as.data.frame(dfwide),
                                direction = "long",
                                idvar = "case_id",
                                timevar="time",
                                times=c("0", "1", "2"))
 dflong <- dflong %>% filter(time %in% 0:1)
-test_var(dflong, "sarc_f", "moca", center = median) %>% clipr::write_clip()
-test_var(dfwide, "hgs.0", "moca.0", center = median) %>% clipr::write_clip()
-test_var(dfwide, "hgs.1", "moca.1", center = median) %>% clipr::write_clip()
-test_var(dflong, "hgs", "moca", center = median) %>% clipr::write_clip()
 
+rbind(test_var(dflong, "sarc_f", "sarc_f", "moca", cvtest = TRUE) %>% t(),
+      test_var(dflong, "hgs", "hgs", "moca", cvtest = TRUE) %>% t()) %>% clipr::write_clip()
+
+test_var(dflong, "sarc_f", "hgs", "moca", cvtest = TRUE, sign1 = "<", sign2 = "<") %>% t() %>% clipr::write_clip()
+test_var(dflong, "sarc_f", "hgs", "moca", cvtest = TRUE, sign1 = ">=", sign2 = ">=") %>% t() %>% clipr::write_clip()
+
+sarc_f0 <- lm(scale(sarc_f.0)~ scale(moca.0), data = dfwide)
+hgs0 <- lm(scale(hgs.0)~ scale(moca.0), data = dfwide)
+model0 <- data.frame(sarc_f0 = sarc_f0$residuals^2, 
+                     hgs0 = hgs0$residuals^2 , moca.0 = dfwide$moca.0)
+
+sarc_f1 <- lm(scale(sarc_f.1)~ scale(moca.1), data = dfwide)
+hgs1 <- lm(scale(hgs.1)~ scale(moca.1), data = dfwide)
+model1 <- data.frame(sarc_f1 = sarc_f1$residuals^2, 
+                     hgs1 = hgs1$residuals^2 , moca.1 = dfwide$moca.1)
+
+model01 <- rbind(data.frame(sarc_f = sarc_f0$residuals^2, 
+                      hgs = hgs0$residuals^2 , moca = dfwide$moca.0),
+                data.frame(sarc_f = sarc_f1$residuals^2, 
+                           hgs = hgs1$residuals^2 , moca = dfwide$moca.1))
+
+test_var(model0, "sarc_f0", "sarc_f0", "moca.0", center = median) %>% t() %>% clipr::write_clip()
+test_var(model0, "hgs0", "hgs0", "moca.0", center = median)  %>% t() %>% clipr::write_clip()
+
+test_var(model0, "sarc_f0", "hgs0", "moca.0", center = median, sign1 = ">=")  %>% t() %>% clipr::write_clip()
+
+
+test_var(model1, "sarc_f1", "sarc_f1", "moca.1", center = median) %>% t() %>% clipr::write_clip()
+test_var(model1, "hgs1", "hgs1", "moca.1", center = median) %>% t() %>% clipr::write_clip()
+
+test_var(model1, "sarc_f1", "hgs1", "moca.1", center = median, sign1 = ">=") %>% t() %>% clipr::write_clip()
+
+
+test_var(model01, "sarc_f", "sarc_f", "moca", center = median)  %>% t() %>% clipr::write_clip()
+test_var(model01, "hgs", "hgs", "moca", center = median)  %>% t() %>% clipr::write_clip()
+
+test_var(model01, "sarc_f", "hgs", "moca", center = median, sign1 = "<", sign2 = "<")  %>% t() %>% clipr::write_clip()
 
 ### exploratory analysis ----
 # baseline vs change ----
@@ -632,7 +551,7 @@ ggplot(dfwide, aes(x=hgs_mean.10, y=hgs.10 )) +
 
 ## regressions ----
 # difference as explanatory variable ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(moca.10~ 1+age_group.0+female+CD+moca.0+sarc_f.0+sarc_f.10, data = dfwide),
                         lm(moca.10~ 1+age_group.0+female+CD+sarc_f.0+sarc_f.10, data = dfwide),
                         lm(sarc_f.10~ 1+age_group.0+female+CD+sarc_f.0+moca.0+moca.10, data = dfwide),
@@ -644,7 +563,7 @@ table <- combind_tables(NULL,
 )
 
 # moca as dependent variable ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(moca.0~ 1+age_group.0+female+CD+sarc_f.0, data = dfwide),
                         lm(moca.1~ 1+age_group.1+female+CD+sarc_f.1, data = dfwide),
                         lm(moca.1~ 1+age_group.1+female+CD+moca.0+sarc_f.1, data = dfwide),
@@ -652,7 +571,7 @@ table <- combind_tables(NULL,
                         lm(moca.1~ 1+age_group.1+female+CD+moca.0+sarc_f.0, data = dfwide)
 )
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(moca.0~ 1+age_group.0+female+CD+hgs.0, data = dfwide),
                         lm(moca.1~ 1+age_group.1+female+CD+hgs.1, data = dfwide),
                         lm(moca.1~ 1+age_group.1+female+CD+moca.0+hgs.1, data = dfwide),
@@ -667,7 +586,7 @@ table <- combind_tables(NULL,
 )
 
 # hgs & sar_hgs as dependent variable ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(hgs.0~ 1+age_group.0+female+CD+moca.0, data = dfwide),
                         lm(hgs.1~ 1+age_group.1+female+CD+moca.1, data = dfwide),
                         lm(hgs.1~ 1+age_group.1+female+CD+hgs.0+moca.1, data = dfwide),
@@ -675,7 +594,7 @@ table <- combind_tables(NULL,
                         lm(hgs.1~ 1+age_group.1+female+CD+hgs.0+moca.0, data = dfwide) 
 )
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         glm(sar_hgs.0~ 1+age_group.0+female+CD+moca.0, family = binomial, data = dfwide),
                         glm(sar_hgs.1~ 1+age_group.1+female+CD+moca.1, family = binomial, data = dfwide),
                         glm(sar_hgs.1~ 1+age_group.1+female+CD+sar_hgs.0+moca.1, family = binomial, data = dfwide),
@@ -684,7 +603,7 @@ table <- combind_tables(NULL,
 )
 
 # sarc_f as dependent variable ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(sarc_f.0~ 1+age_group.0+female+CD+moca.0, data = dfwide),
                         lm(sarc_f.1~ 1+age_group.1+female+CD+moca.1, data = dfwide),
                         lm(sarc_f.1~ 1+age_group.1+female+CD+sarc_f.0+moca.1, data = dfwide),
@@ -699,7 +618,7 @@ table <- combind_tables(NULL,
 )
 
 # longitudinal ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lmer(sarc_f~ 1+age_group+female+CD+moca+ (1| case_id) , REML = TRUE, data = df),
                         glmer(sar~ 1+age_group+female+CD+moca+ (1| case_id), family = binomial, data = df),
                         lmer(hgs~ 1+age_group+female+CD+moca+ (1| case_id) , REML = TRUE, data = df),
@@ -715,7 +634,7 @@ table <- combind_tables(NULL,
 )
 
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lmer(sarc_f~ 1+age_group+female +moca+ (1| case_id) , REML = TRUE, data = df),
                         glmer(sar~ 1+age_group+female +moca+ (1| case_id), family = binomial, data = df),
                         lmer(hgs~ 1+age_group+female +moca+ (1| case_id) , REML = TRUE, data = df),
@@ -730,7 +649,7 @@ table <- combind_tables(NULL,
                         glmer(mci~ 1+age_group+female +sar_hgs+ (1| case_id), family = binomial, data = df)
 )
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lmer(sarc_f~ 1  +moca+ (1| case_id) , REML = TRUE, data = df),
                         glmer(sar~ 1  +moca+ (1| case_id), family = binomial, data = df),
                         lmer(hgs~ 1  +moca+ (1| case_id) , REML = TRUE, data = df),
@@ -748,7 +667,7 @@ table <- combind_tables(NULL,
 
 
 test <- df
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lmer(sarc_f~ 1 + (1| case_id) , REML = TRUE, data = test),
                         glmer(sar~ 1 + (1| case_id), family = binomial, data = test),
                         lmer(hgs~ 1 + (1| case_id) , REML = TRUE, data = test),
@@ -759,7 +678,7 @@ table <- combind_tables(NULL,
 
 
 # binary SARC-F & binary/categorical MCI ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         glm(sar.0~1+age_group.0+female+CD+mci.0, family = binomial, data =  dfwide),
                         glm(sar.1~1+age_group.1+female+CD+mci.1, family = binomial, data =  dfwide),
                         glm(sar.1~1+age_group.1+female+CD+sar.0+mci.1, family = binomial, data =  dfwide),
@@ -776,7 +695,7 @@ table <- combind_tables(NULL,
 dfwide$mci_cat.0 <- relevel(as.factor(dfwide$mci_cat.0),ref="None") # for categorical MCI
 dfwide$mci_cat.1 <- relevel(as.factor(dfwide$mci_cat.1),ref="None") # for categorical MCI
 
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         glm(sar.0~1+age_group.0+female+CD+mci_cat.0, family = binomial, data =  dfwide),
                         glm(sar.1~1+age_group.1+female+CD+mci_cat.1, family = binomial, data =  dfwide),
                         glm(sar.1~1+age_group.1+female+CD+sar.0+mci_cat.1, family = binomial, data =  dfwide),
@@ -791,7 +710,7 @@ table <- combind_tables(NULL,
 )
 
 # binary MCI as dependent variable ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         glm(mci.0~1+age_group.0+female+CD+sar.0, family = binomial, data =  dfwide),
                         glm(mci.1~1+age_group.1+female+CD+sar.1, family = binomial, data =  dfwide),
                         glm(mci.1~1+age_group.1+female+CD+mci.0+sar.1, family = binomial, data =  dfwide),
@@ -812,7 +731,7 @@ table <- combind_tables(NULL,
 )
 
 # R2 comparisons (moca) ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         lm(moca.0~ 1+age_group.0, data = dfwide),
                         lm(moca.0~ 1+female, data = dfwide),
                         lm(moca.0~ 1+CD, data = dfwide),
@@ -848,7 +767,7 @@ table <- combind_tables(NULL,
 )
 
 # R2 comparisons (MCI) ----
-table <- combind_tables(NULL,
+table <- combine_tables(NULL,
                         glm(mci.0~ 1+age_group.0, family = binomial, data = dfwide),
                         glm(mci.0~ 1+female, family = binomial, data = dfwide),
                         glm(mci.0~ 1+CD, family = binomial, data = dfwide),

@@ -29,6 +29,8 @@
 ## get_freqtable() returns up to 3-way frequency table as a data frame
 ## eval_() simplifies eval(parse()) globally, while concatenating strings so that paste/sprintf functions are not needed. Beware of certain problems since it evaluates objects from the global environment
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
+## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_table()
+## gen_table() generates the results for each model to be used by combine_tables() 
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
 sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ()
@@ -417,6 +419,142 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
     }
   }
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
+}
+
+gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE){ 
+  require(lmerTest)
+  table <- data.frame(matrix(ncol = 2,  nrow = 0))
+  row_count <- 1
+  col_count <- 2
+  
+  dep_var <- as.character(formula(fit)[2])
+  
+  if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
+    n <- iferror(nobs(fit), NA)
+    n_unique <- iferror(summary(fit)$ngrps, NA)
+    table[row_count, 1] <- "N (unique)"
+    table[row_count, col_count] <-  paste0(n, " (", n_unique, ")")
+    row_count <- row_count + 1
+    
+    icc <- iferror(performance::icc(fit)[[1]], NA)
+    icc <- round_format(icc, 3)
+    table[row_count, 1] <- "ICC"
+    table[row_count, col_count] <-  icc
+    row_count <- row_count + 1
+  } else if (class(fit)[1] %in% "glm") {
+    n <- iferror(nobs(fit), NA)
+    table[row_count, 1] <- "N"
+    table[row_count, col_count] <-  n
+    row_count <- row_count + 1
+    
+    if(adjusted_r2){
+      adj_r2 <- iferror(1 - ((summary(fit)$deviance/-2)-(length(fit$coeff)-1)) / (summary(fit)$null.deviance/-2), NA)
+      adj_r2 <- round_format(adj_r2, 3)
+      table[row_count, 1] <- "Adjusted R2"
+      table[row_count, col_count] <-  adj_r2
+    } else {
+      r2 <- iferror(1 - ((summary(fit)$deviance/-2)) / (summary(fit)$null.deviance/-2), NA)
+      r2 <- round_format(r2, 3)
+      table[row_count, 1] <- "R2"
+      table[row_count, col_count] <-  r2
+    }
+    row_count <- row_count + 1
+    
+  } else if (class(fit)[1] %in% "coxph"){
+    n <- iferror(summary(fit)$n, NA)
+    table[row_count, 1] <- "N"
+    table[row_count, col_count] <-  n
+    row_count <- row_count + 1
+    
+    concordance <- iferror(round_format(summary(fit)$concordance[[1]], 3), NA)
+    table[row_count, 1] <- "Concordance"
+    table[row_count, col_count] <-  concordance
+    
+    row_count <- row_count + 1
+    
+  } else {
+    n <- iferror(nobs(fit), NA)
+    table[row_count, 1] <- "N"
+    table[row_count, col_count] <-  n
+    row_count <- row_count + 1
+    
+    if(adjusted_r2){
+      adj_r2 <- iferror(round_format(summary(fit)$adj.r.squared, 3), NA)
+      table[row_count, 1] <- "Adjusted R2"
+      table[row_count, col_count] <-  adj_r2
+    } else {
+      r2 <- iferror(round_format(summary(fit)$r.squared, 3), NA)
+      table[row_count, 1] <- "R2"
+      table[row_count, col_count] <-  r2
+    }
+    row_count <- row_count + 1
+  }
+  
+  for (var in row.names(summary(fit)$coef)){
+    
+    if (!(var %in% unlist(table[1]))){
+      table[row_count, 1] <- var
+      if (grepl("age_group.", var, fixed = TRUE)){
+        var_name <- substr(var, nchar("age_group.")+2, nchar(var))
+        table[row_count, 1] <- var_name
+      } else if (grepl("age_group", var, fixed = TRUE)){
+        var_name <- substr(var, nchar("age_group")+1, nchar(var))
+        table[row_count, 1] <- var_name
+      }
+    } else {
+      row_count <- match(var, unlist(table[1]))
+    }
+    
+    print(paste(dep_var, var))
+    
+    colnames(table)[col_count] <- dep_var
+    
+    beta <- iferror(summary(fit)$coef[var, 1], NA)
+    if (class(fit)[1] %in% "coxph"){
+      se <-  iferror(summary(fit)$coef[var, 3], NA)
+    } else {
+      se <-  iferror(summary(fit)$coef[var, 2], NA)
+    }
+    lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
+    upperCI <- iferror(beta + qnorm(0.975) * se, NA)
+    p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
+    
+    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
+    if (show_p){
+      table[row_count, col_count] <-  round_format(p_value, 4)
+    } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
+      table[row_count, col_count] <-  starred_p(p_value, 3, exp(beta))
+      if (show_CI){
+        table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), 3), ", ", round_format(exp(upperCI), 3))
+      }
+    } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
+      table[row_count, col_count] <-  paste0(round_format(lowerCI, 3), ", ", round_format(upperCI, 3))
+    } else {
+      table[row_count, col_count] <-  starred_p(p_value, 3, beta)
+    }
+    
+    row_count <- row_count + 1
+    
+  }
+  col_count <- col_count + 1
+  return(table)
+}
+
+combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE){
+  for (i in 1:length(list(...))){
+    if (is.null(table) & i == 1){
+      table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
+      next
+    }
+    new_table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
+    dep_vars <- names(table)
+    dep_var <- names(new_table)[2]
+    names(table) <- c("X1",rep(2:ncol(table)))
+    table <- plyr::join(table, new_table, by=c("X1"), type="full")
+    names(table) <- c(dep_vars, dep_var)
+    names(table)[names(table) == "X1"] <- ""
+  }
+  return(table)
 }
 
 # robust SEs for lm()
