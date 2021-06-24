@@ -280,7 +280,6 @@ table <- combine_tables(NULL,
                         lm(scale(sarc_f.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0)+mci.1, data = dfwide)
 )
 
-
 table <- combine_tables(NULL,
                         show_CI = TRUE,
                         lm(hgs.0~ 1+age_group.0+female+CD+eduf0+moca.0, data = dfwide),
@@ -300,7 +299,6 @@ table <- combine_tables(NULL,
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(hgs.0)+mci.0, data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(hgs.0)+mci.1, data = dfwide)
 )
-
 
 table <- combine_tables(NULL,
                         show_CI = TRUE,
