@@ -8,20 +8,34 @@ source("helper_functions.R")
 library(dplyr)
 library(labelled)
 
+Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-# merge datasets ----
-df <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-06-05.xlsx", sheetName  = "Raw data"
-                       , encoding = "UTF-8"
-                       , header = TRUE
-)
-
-# # merge refusal and cannot contact data ----
+# # merge datasets ----
+# df <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-06-05.xlsx", sheetName  = "Raw data"
+#                        , encoding = "UTF-8"
+#                        , header = TRUE
+# )
+# names(df)[names(df)=="Uid"] <- "member_id"
+# 
+# setwd(sprintf("~%s/ehealth/wbs", setpath))
+# # get 18 district info for each centre
+# temp <- xlsx::read.xlsx2("Result_18districtQ1 (2021-01-31).xlsx", sheetName  = "District"
+#                            , encoding = "UTF-8"
+#                            , header = TRUE
+# )
+# names(temp)[names(temp)=="Centre.code"] <- "Survey_centre"
+# names(temp)[names(temp)=="X18.district"] <- "district_cht"
+# 
+# df <- merge(df, temp[, c("Survey_centre", "district_cht")], # extract item matched by case ID
+#             by=c("Survey_centre"), all.x = TRUE)
+# 
+# # merge refusal and cannot contact data
 # temp <- xlsx::read.xlsx2("EHealthII_baseline_reject list 20120623.xlsx", sheetName  = "reject"
 #                          , encoding = "UTF-8"
 #                          , header = TRUE
 # )
 # temp <- temp[1:159,] # remove extra rows
-# names(temp)[1] <- "Uid"
+# names(temp)[1] <- "member_id"
 # temp <- temp[, c(1, 7:8)]
 # temp$type <- "refused"
 # 
@@ -31,18 +45,18 @@ df <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-06-05.xlsx", sh
 #                          , header = TRUE
 # )
 # temp2 <- temp2[1:82,] # remove extra rows
-# names(temp2)[1] <- "Uid"
+# names(temp2)[1] <- "member_id"
 # temp2 <- temp2[, c(1, 7:8)]
 # temp2$type <- "unreachable"
 # 
 # temp <- rbind(temp, temp2)
 # rm(temp2)
 # 
-# # df <- merge(df, temp[, c("Uid", "reason_grouped", "round", "type")], # extract item matched by case ID
-# #             by=c("Uid"), all.x = TRUE)
+# df <- merge(df, temp[, c("member_id", "reason_grouped", "round", "type")], # extract item matched by case ID
+#             by=c("member_id"), all.x = TRUE)
 # 
-# df <-  merge(temp, df, # extract item matched by case ID
-#                     by=c("Uid"), all.x = TRUE)
+# # df <-  merge(temp, df, # extract item matched by case ID
+# #                     by=c("Uid"), all.x = TRUE)
 # 
 # # # legacy code
 # # # merge 1st refusal data
@@ -89,7 +103,13 @@ df <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-06-05.xlsx", sh
 
 # load data ----
 df <- readRDS("refusal_data.rds") 
-df$type <- ifelse(is.na(df$type), "not refused", df$type)
+
+# get REDCap data
+setwd(sprintf("~%s/ehealth", setpath))
+temp <- readRDS("ehealth_data.rds") 
+df$type <- ifelse(df$member_id %in% unique(temp$member_id), "completed",  df$type)
+df$type <- ifelse(is.na(df$type), "not completed", df$type)
+
 df <- df[df$Questionnaire_code=="Q1",] # subset to first response
 df$Age <- as.numeric(df$Age)
 df$Age <- ifelse(df$Age<=50, NA, df$Age) # n=2 where age is wrong (age of 0 & 25)
@@ -98,8 +118,9 @@ df$age_group <- recode_age(df$Age, age_labels = NULL, second_group = 50, interva
 df <- droplevels(df) # drop empty categories in variables
 vars <- df %>% 
   select(Hypertension, Diabetes, Cholesterol, Heart, Stroke, Copd, Renal, Disease_other, FS_total, SAR_total, 
-         Memory, Self_rated_health, Satisfaction, Overall_score,
-         Marital_status, Education, Living_status, Housing_type) %>% names()
+         Memory, Self_rated_health, Satisfaction, Meaning_of_life, Happiness, Overall_score,
+         Marital_status, Education, Living_status, Housing_type, 
+         Incontinence, Hospital, Hospital_day, Aeservices, SOPD, GOPD, Clinic, Elderly_centre, Drug_use) %>% names()
 df[vars] <- lapply(df[vars], as.numeric)
 
 df$Marital_status <- labelled(df$Marital_status, c("Single" = 1, "Married" = 2, "Widowed" = 3, "Divorced/separated" = 4))
@@ -111,22 +132,42 @@ df$Education <- to_factor(df$Education)
 df$Living_status <- labelled(df$Living_status, c("Living alone" = 1, "Living with spouse" = 2, "Living with children" = 3, "Living with spouse and children" = 4, "Living with others (e.g.: maid)" = 5))
 df$Living_status <- to_factor(df$Living_status)
 
+df$Living_alone <- ifelse(df$Living_status == "Living alone", 1, 0)
+
 df$Housing_type <- labelled(df$Housing_type, c("Public rental housing" = 1, "Subsidized housing" = 2, "Private housing" = 3, "Nursing home" = 4, "Other (e.g. subdivided flat)" = 5))
 df$Housing_type <- to_factor(df$Housing_type)
 
+df$Incontinence <- labelled(df$Incontinence, c("Incontinence" = 1, "Seldom" = 2, "Self-control" = 3))
+df$Incontinence <- to_factor(df$Incontinence)
+
+df$Aeservices_day <- car::recode(df$Aeservices_day, "
+'' = 0;
+' 6' = 6;
+c('1次', 'I ', 'l') = 1;
+'2-3' = 2.5;
+'3-4次' = 3.5;
+'5-6' = 5.5
+")
+df$Aeservices_day <- as.numeric(df$Aeservices_day)
+
+df$Drug_use <- labelled(df$Drug_use, c("None" = 1, " 1-4" = 2, " 5+" = 3))
+df$Drug_use <- to_factor(df$Drug_use)
+
 # descriptive statistics ----
-numVars <- c("Age", "age_group", "Gender", "ngo_cht", "Overall_score",
+numVars <- c("Age", "age_group", "Gender", "ngo_cht", "district_cht", "Overall_score",
              "FS_total", "SAR_total", "Hypertension", "Diabetes", "Cholesterol", "Heart", "Stroke", "Copd", "Renal", "Disease_other", 
-             "Self_rated_health", "Satisfaction",
-             "Marital_status", "Education", "Income", "Living_status", "Housing_type")
-catVars <- c("age_group", "Gender",  "ngo_cht", 
-             "Marital_status", "Income", "Education", "Living_status", "Housing_type")
+             "Self_rated_health", "Satisfaction", "Meaning_of_life", "Happiness", 
+             "Marital_status", "Education", "Income", "Living_status", "Living_alone", "Housing_type", 
+             "Incontinence", "Hospital", "Hospital_day", "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", "Drug_use")
+catVars <- c("age_group", "Gender",  "ngo_cht", "district_cht",
+             "Marital_status", "Income", "Education", "Living_status", "Housing_type", 
+             "Incontinence", "Drug_use")
 
-tableone::CreateTableOne(data =  df[df$type %in% c("not refused", "refused"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  df[df$type %in% c("completed", "refused"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
-tableone::CreateTableOne(data =  df[df$type %in% c("not refused", "unreachable"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  df[df$type %in% c("completed", "unreachable"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
-tableone::CreateTableOne(data =  df[df$type %in% c("refused", "unreachable"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
+tableone::CreateTableOne(data =  df[df$type %in% c("completed", "not completed"),], strata = "type", vars = numVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
