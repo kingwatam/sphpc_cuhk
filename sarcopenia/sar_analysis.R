@@ -169,11 +169,12 @@ hist2 <- ggplot(dfwide, aes(x=sarc_f.0)) + geom_histogram() + xlab(varlist[varli
 hist5 <- ggplot(dfwide, aes(x=sarc_f.1)) + geom_histogram() + xlab(varlist[varlist$V1=="sarc_f.1",2])
 hist3 <- ggplot(dfwide, aes(x=hgs.0)) + geom_histogram() + xlab(varlist[varlist$V1=="hgs.0",2])
 hist6 <- ggplot(dfwide, aes(x=hgs.1)) + geom_histogram() + xlab(varlist[varlist$V1=="hgs.1",2])
-histograms <- hist1 + hist2 + hist3 + hist4 + hist5 + hist6 
+# histograms <- hist1 + hist2 + hist3 + hist4 + hist5 + hist6 
+histograms <- hist1 + hist4 + hist2 + hist5 + hist3 + hist6 + plot_layout(ncol = 2)
 print(histograms)
-# setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
-# ggsave("hist.png", plot = histograms, height =  28, width =  50, units = "cm", dpi = 300)
-# dev.off()
+setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
+ggsave("hist.png", plot = histograms, height =  42, width =  50, units = "cm", dpi = 300)
+dev.off()
 
 # functions to generate plots ----
 get_plot_main <- function(df, x, y, xlab, ylab, jitter_w = 0, jitter_h = 0, 
@@ -182,7 +183,7 @@ get_plot_main <- function(df, x, y, xlab, ylab, jitter_w = 0, jitter_h = 0,
     geom_smooth(method=lm, color="black", formula = y~x) +
     ggpmisc::stat_poly_eq(formula = y~x, 
                           aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
-                          parse = TRUE) +
+                          parse = TRUE, size = text_size*1.4) +
     # geom_bin2d(bins =  50) + # stat_bin2d(bins=50, aes(fill = ..density..))  
     geom_jitter(width = jitter_w, height = jitter_h) +
     xlab(xlab) + ylab(ylab) +
@@ -202,7 +203,6 @@ get_plot <- function(df, x, y, jitter_w = 0, jitter_h = 0,
                        yintercept = yintercept, xintercept = xintercept, text_size = text_size))
 }
 
-
 # MoCA vs SARC-F vs HGS scatterplots (different x & y) ----
 plot1 <- get_plot(dfwide, 
                         x = "moca.0", y = "sarc_f.0",
@@ -216,11 +216,11 @@ plot3 <- get_plot(dfwide,
 plot4 <- get_plot(dfwide, 
                         x = "moca.1", y = "hgs.1",
                         jitter_w = 0.25, jitter_h = 0)
-scatterplots <- plot1+plot2+plot3+plot4
+scatterplots <- plot1+plot2+plot3+plot4 
 print(scatterplots)
-# setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
-# ggsave("scatter.png", plot = scatterplots, height =  28, width =  50, units = "cm", dpi = 300)
-# dev.off()
+setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
+ggsave("scatter.png", plot = scatterplots, height =  28, width =  50, units = "cm", dpi = 600)
+dev.off()
 
 plot5 <- get_plot(dfwide, 
                         x = "moca.0", y = "sarc_f.1",
