@@ -277,8 +277,8 @@ eq5d_fast <- function(scores, country, version, type, ignore.invalid){
   return(sum_scores)
 }
 
-import_func <- function(R_file){
-  expressions <- parse(R_file)
+import_func <- function(R_file, encoding = "unknown"){
+  expressions <- parse(R_file, encoding = encoding)
   functions_only <- sapply(expressions, function(x) {
     if(x[[1]]=="<-") {
       if("function" %in% as.character(x[3][[1]])) {
