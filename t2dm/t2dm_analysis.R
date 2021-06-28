@@ -65,7 +65,9 @@ df$checkup_freq <- drop_unused_value_labels(df$checkup_freq) %>% to_factor()
 df$checkup_freq <- car::recode(df$checkup_freq, " 'Not Applicable' = 'None'")
 df$checkup_freq <- factor(df$checkup_freq, levels = c("None", "More than 24 months", "13-24 months", "Less than 13 months"))
 df$checkup_freq <- relevel(df$checkup_freq, ref = "None")
-
+names(df)[names(df)=="Q120"] <- "family_doctor"
+df$family_doctor <- ifelse(df$family_doctor == 1, 1,
+                           ifelse(df$family_doctor == 2, 0, NA))
 
 df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 20, interval = 5, last_group = 75)
 df$age_group <- car::recode(df$age_group, " '0-19' = '15-19' ") # min age for PHS survey is 15
@@ -77,7 +79,7 @@ df$male <- ifelse(df$sex == "Male", 1, 0)
 
 df$HbA1c <- ifelse(df$HbA1c == 333, 3.8, df$HbA1c) # less than 3.8% is censored 
 
-df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35 != 1, 1, 
+df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a != 1 & df$Q35 != 1), 1, 
                        ifelse(df$Q35a ==  1, 0, NA)) # incident cases as control
 
 df$case_prev <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35 != 1, 1, 
@@ -189,12 +191,61 @@ df$income_cat3 <- factor(df$income_cat3, ordered = TRUE, levels = c("$0 - $5,999
 df$income_cat3 <- factor(df$income_cat3, ordered = FALSE)
 
 
-# main analysis ----
+# physical activity ----
+df <- df %>%
+  rowwise() %>% 
+  mutate(
+    # MET_week_con = sum(8*pa_work_vig, 4*pa_work_mod, 4*pa_trans, 8*pa_recr_vig, 4*pa_recr_mod, na.rm = TRUE), # reproduce MET_week_con variable
+    pa_vig = sum(pa_work_vig, pa_recr_vig, na.rm = TRUE),
+    pa_mod = sum(pa_work_mod, pa_recr_mod, na.rm = TRUE),
+    MET_work = sum(8*pa_work_vig, 4*pa_work_mod, na.rm = TRUE), 
+    MET_recr = sum(8*pa_recr_vig, 4*pa_recr_mod, na.rm = TRUE),
+    MET_trans = sum(4*pa_trans, na.rm = TRUE),
+    MET_work_trans = sum(8*pa_work_vig, 4*pa_work_mod, 4*pa_trans, na.rm = TRUE)
+  ) 
+
+# df$who_pa <- ifelse(df$pa_mod >= 150 | df$pa_vig >= 75 | df$MET_week_con >= 600, 1, 0) # reproduce who_pa variable
+# df$who_pa_MET <- ifelse(df$MET_week_con >= 600, 1, 0) 
+# df$who_pa_vig <- ifelse(df$pa_vig >= 75, 1, 0)
+df$who_pa_mod <- ifelse(df$pa_mod >= 30, 1, 0)
+df$who_pa_trans <- ifelse(df$pa_trans >= 110, 1, 0)
+
+
+df$pa_work_prop <- df$MET_work/df$MET_week_con
+df$pa_recr_prop <- df$MET_recr/df$MET_week_con
+df$pa_trans_prop <- df$MET_trans/df$MET_week_con
+df$pa_work_trans_prop <- df$MET_work_trans/df$MET_week_con
+
+# exploratory analysis ----
 df <- df[df$age <= 84,] # match age range of those who took health exam
 df$econ_active <- ifelse(df$econ == "Economically active persons", 1, 0)
 
-table <- gen_table(glm(case_prev~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combine_tables(table, exponentiate = TRUE,
+table <- combine_tables(NULL, exponentiate = TRUE,
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+I((pa_trans+pa_work_vig+pa_work_mod)>150), family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_work_mod, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_trans, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_recr_vig, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_recr_mod, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+sed_time_perday, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_work_vig+pa_work_mod+pa_trans+pa_recr_vig+pa_recr_mod+sed_time_perday, family = binomial, data =  df)
+)
+
+glm(case_inc~1+marital, family = binomial, data =  df) %>% summary
+
+table <- combine_tables(NULL, exponentiate = TRUE,
+               glm(case_inc~1+age+male+I(MET_trans+MET_work+MET_recr), family = binomial, data =  df),
+               glm(case_inc~1+age+male+who_pa, family = binomial, data =  df),
+               glm(case_inc~1+age+male+I(pa_trans+pa_work_vig+pa_work_mod), family = binomial, data =  df),
+               glm(case_inc~1+age+male+pa_recr_vig, family = binomial, data =  df),
+               glm(case_inc~1+age+male+pa_recr_mod, family = binomial, data =  df),
+               glm(case_inc~1+age+male+sed_time_perday, family = binomial, data =  df),
+               glm(case_inc~1+age+male+pa_work_vig+pa_work_mod+pa_trans+pa_recr_vig+pa_recr_mod+sed_time_perday, family = binomial, data =  df)
+               
+               
+)
+
+table <- combine_tables(NULL, exponentiate = TRUE,
+                        glm(case_prev~1, family = binomial, data =  df),
                         glm(case_prev~1+age, family = binomial, data =  df),
                         glm(case_prev~1+age+male, family = binomial, data =  df),
                         glm(case_prev~1+age+male+educ, family = binomial, data =  df),
@@ -210,8 +261,8 @@ table <- combine_tables(table, exponentiate = TRUE,
 )
 table %>% clipr::write_clip()
 
-table <- gen_table(glm(case_prev~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combine_tables(table, exponentiate = TRUE,
+table <- combine_tables(NULL, exponentiate = TRUE,
+                        glm(case_prev~1, family = binomial, data =  df),
                         glm(case_prev~1+age, family = binomial, data =  df),
                         glm(case_prev~1+age+male, family = binomial, data =  df),
                         glm(case_prev~1+age+male+HT_prev, family = binomial, data =  df),
@@ -228,8 +279,8 @@ table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 
-table <- gen_table(glm(case_inc~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combine_tables(table, exponentiate = TRUE,
+table <- combine_tables(NULL, exponentiate = TRUE,
+                        glm(case_inc~1, family = binomial, data =  df),
                         glm(case_inc~1+age, family = binomial, data =  df),
                         glm(case_inc~1+age+male, family = binomial, data =  df),
                         glm(case_inc~1+age+male+educ, family = binomial, data =  df),
@@ -244,8 +295,8 @@ table <- combine_tables(table, exponentiate = TRUE,
                         glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 
-table <- gen_table(glm(case_inc~1, family = binomial, data =  df), exponentiate = TRUE)
-table <- combine_tables(table, exponentiate = TRUE,
+table <- combine_tables(NULL, exponentiate = TRUE,
+                        glm(case_inc~1, family = binomial, data =  df),
                         glm(case_inc~1+age, family = binomial, data =  df),
                         glm(case_inc~1+age+male, family = binomial, data =  df),
                         glm(case_inc~1+age+male+HT_prev, family = binomial, data =  df),
@@ -289,8 +340,20 @@ table <- explore_var(df)
 
 # descriptive statistics ----
 # create new case-control variable
-allVars <- c("age", "age_cat", "sex", "educ", "marital", "econ", "income_num", "income_cat3", "district", "hse_income", "hse_type", "live.alone", "Family.history.DM", "health", "who_pa", "checkup", "checkup_freq")
-catVars <- c("age_cat", "sex", "educ", "marital", "econ", "income_cat3", "district", "hse_income", "hse_type", "checkup_freq")
+allVars <- c("age", "age_cat", "sex", "educ", "marital", "econ", "econ_active", "occup", "income_num", "income_cat3", "district", "hse_income", "hse_type", 
+             "live.alone", "Family.history.DM", "health", "who_pa", "checkup", "checkup_freq", "family_doctor", "BMI_recal")
+catVars <- c("age_cat", "sex", "educ", "marital", "econ", "occup", "income_cat3", "district", "hse_income", "hse_type", "checkup_freq", "HT_prev", "hyperchol_prev")
 
+df$occup[!is.na(df$case_inc)]  <- drop_unused_value_labels(df$occup[!is.na(df$case_inc)] )
+
+
+allVars <- "occup"
 tableone::CreateTableOne(data =  df, strata = "case_inc", vars = allVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+allVars <- c("MET_week_con", "MET_work", "MET_trans", "MET_recr", 
+             "pa_work_prop", "pa_trans_prop", "pa_recr_prop", 
+             "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "pa_vig", "pa_mod", "sed_time_perday",
+             "who_pa")
+tableone::CreateTableOne(data =  df, strata = "case_prev", vars = allVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()

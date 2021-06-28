@@ -15,6 +15,7 @@
 ## recode_age(var, age_labels = NULL, second_group = 25, interval = 5, last_group = 65) recodes age into age groups - either arbitrary age groups by providing age_lables or by a fixed interval. 
 #### Default values are equivalent to using age_labels = c("0-24", "25-29" ,"30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65+") 
 #### Otherwise, skip the age_labels option by specifying the second group starting age, and fixed interval and the last group starting age, i.e. recode_age(df$age, , 25, 5, 65). 
+## get_midage() convert from age groups to midage, starting age is used for last age group by default
 ## eq5d_fast implements a highly efficient version of calculating eq5d based on the original package, with constant running time versus linear time
 ## import_func() imports only functions from another R script, analagous to the base source() function but ignores non-functions inside the script
 ## write_excel() writes tables as multiple sheets in an Excel file
@@ -31,6 +32,7 @@
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
 ## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_table()
 ## gen_table() generates the results for each model to be used by combine_tables() 
+## save_() works the same as save() with user-defined names for objects
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
 sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ()
@@ -199,6 +201,25 @@ recode_age <- function(var, age_labels = NULL, second_group = 25, interval = 5, 
   }
 }
 
+get_midage <- function(age_group, last_age_plus = 0){
+  require(parallel)
+  if (length(age_group) > 15000){
+    cl <- makeCluster(detectCores())
+    starting_age <- parLapply(cl, age_group, before_char, char = "-|+") 
+    ending_age <-  parLapply(cl, age_group, after_char, char = "-") 
+    stopCluster(cl)
+  } else {
+    starting_age <- lapply(age_group, before_char, char = "-|+") 
+    ending_age <-  lapply(age_group, after_char, char = "-") 
+  }
+  starting_age <- suppressWarnings(as.numeric(starting_age))
+  ending_age <- suppressWarnings(as.numeric(ending_age))
+  
+  midage <- (starting_age+ending_age)/2
+  midage <- ifelse(midage %in% NA, starting_age + last_age_plus, midage)
+  return(midage)
+}
+
 eq5d_fast <- function(scores, country, version, type, ignore.invalid){
   require(eq5d)
   
@@ -356,7 +377,7 @@ after_dollarsign <- function(x) {
 }
 
 after_char <- function(x, char) {
-  return(substring(x, regexpr(paste0("[", char,"]"), x)+1, nchar(x)))
+  return(substring(x, regexpr(paste0("[", char,"]"), x)+1, nchar(as.character(x))))
 }
 
 before_char <- function(x, char) {
@@ -555,6 +576,11 @@ combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALS
     names(table)[names(table) == "X1"] <- ""
   }
   return(table)
+}
+
+save_ <- function(..., file) { # https://stackoverflow.com/questions/21248065/r-rename-r-object-while-save-ing-it
+  x <- list(...)
+  save(list=names(x), file=file, envir=list2env(x))
 }
 
 # robust SEs for lm()
