@@ -7,6 +7,7 @@
 ## Author: King Wa Tam
 ##
 ## Notes:
+## %!in% operater negates %in%
 ## summ() & tab() work like sum & tab functions in Stata
 ## summ() e.g. summ(df$var1, df$var2, ...) or summ(df1, df2, ...) or sum(df$var1, df2)
 ## tab() e.g. tab(df$var1, df$var2, df$var3...)
@@ -34,6 +35,8 @@
 ## gen_table() generates the results for each model to be used by combine_tables() 
 ## save_() works the same as save() with user-defined names for objects
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
+
+'%!in%' <- Negate('%in%')
 
 sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ()
   argx <- var_name
