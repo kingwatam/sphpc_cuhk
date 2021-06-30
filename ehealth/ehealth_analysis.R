@@ -514,3 +514,17 @@ for (var in allVars){
   print(plot)
 }
 dev.off()
+
+# plot data collection dates ----
+# restrict to those with both T0 & T1
+temp <- df %>%
+  add_count(member_id) %>%
+  filter(n == 2) 
+# temp <- df
+temp$time <- as.factor(temp$time)
+
+ggplot(temp, aes(x=as.Date(ehealth_eval_timestamp), color = time)) + 
+  geom_histogram(bins = 100, alpha=0.2,position="identity") +
+  # geom_jitter(height = 0.25) +
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
+  theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1))

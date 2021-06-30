@@ -338,7 +338,9 @@ ggplot(df, aes(x=date, y=time, color=time, shape=time)) +
   geom_smooth(method=lm, aes(fill=time))
 
 # plot data collection dates ----
-ggplot(df, aes(x=date, y=time)) + 
-  geom_point() + 
-  scale_x_date(date_breaks = "3 month", date_minor_breaks = "1 month", date_labels="%b/%Y") +
+df$time <- as.factor(df$time)
+ggplot(df, aes(x=date, color = time)) + 
+  geom_histogram(bins = 200, alpha=0.2,position="identity") +
+  # geom_jitter(height = 0.25) +
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
   theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1))
