@@ -10,10 +10,13 @@ library(eq5d)
 library(lubridate) # interval() & duration()
 library(ggplot2)
 
+Sys.setlocale(locale =  "eng")
 # import cleaned data
 setwd(sprintf("~%s/ehealth", setpath))
 df <- readRDS("ehealth_data.rds")
 wbs <- readRDS("wbs_data.rds")
+
+import_func("ehealth_analysis.R", encoding = "UTF-8") # import to_character_df() & to_English() functions
 
 df %>% select(starts_with("amic") & ends_with(sprintf("%s", 1:5))) %>% colnames(.) -> amic_
 df %>% select(starts_with("self_efficacy_")) %>% colnames(.) -> self_efficacy_ 
@@ -86,159 +89,6 @@ tableone::CreateTableOne(data =  df,
                          # , factorVars = catVars
 ) %>% 
   print(showAllLevels = TRUE, nonnormal = otherVars) %>% clipr::write_clip()
-
-to_character_df <- function(df, vars){
-  for (var in vars) {
-    df[[var]] <- to_character(df[[var]])
-  }
-  return(df)
-}
-
-to_English <- function(df){
-  for (var in self_efficacy_){
-    df[[var]] <- to_labelled(to_factor(df[[var]]))
-    valLabels <- val_labels(df[[var]])
-    label_order <- c(which(names(valLabels) == "完全正確"),
-                     which(names(valLabels) == "多數正確"),
-                     which(names(valLabels) == "尚算正確"),
-                     which(names(valLabels) == "完全不正確"))
-    names(valLabels)[names(valLabels) == "完全正確"] <- "Absolutely true"
-    names(valLabels)[names(valLabels) == "多數正確"] <- "Mostly true"
-    names(valLabels)[names(valLabels) == "尚算正確"] <- "Partly true"
-    names(valLabels)[names(valLabels) == "完全不正確"] <-  "Absolutely not true"
-    val_labels(df[[var]]) <- valLabels[label_order]
-    df[[var]] <- to_factor(df[[var]])
-  }
-  var <- "pase_c_1"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  names(valLabels)[names(valLabels) == "冇"] <- "None"
-  names(valLabels)[names(valLabels) == "好少 (1至2日)"] <- "Rarely (1-2 days)"
-  names(valLabels)[names(valLabels) == "有時 (3至4日)"] <- "Sometimes (3-4 days)"
-  names(valLabels)[names(valLabels) == "經常 (5至7日)"] <-  "Often (5-7 days)"
-  val_labels(df[[var]]) <- valLabels
-  df[[var]] <- to_factor(df[[var]])
-  
-  var <- "pase_c_1_2"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "少過1個鐘"),
-                   which(names(valLabels) == "1至2個鐘"),
-                   which(names(valLabels) == "2至4個鐘"),
-                   which(names(valLabels) == "多過4個鐘"))
-  names(valLabels)[names(valLabels) == "少過1個鐘"] <- "Less than 1 hour"
-  names(valLabels)[names(valLabels) == "1至2個鐘"] <- "1-2 hours"
-  names(valLabels)[names(valLabels) == "2至4個鐘"] <- "2-4 hours"
-  names(valLabels)[names(valLabels) == "多過4個鐘"] <-  "More than 4 hours"
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  var <- "pase_c_11"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "有"),
-                   which(names(valLabels) == "冇"))
-  names(valLabels)[names(valLabels) == "冇"] <- "No"
-  names(valLabels)[names(valLabels) == "有"] <- "Yes"
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  var <- "pase_c_12_1"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "Yes"),
-                   which(names(valLabels) == "No"))
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  for (var in matrix_diet_){
-    df[[var]] <- to_labelled(to_factor(df[[var]]))
-    valLabels <- val_labels(df[[var]])
-    # label_order <- c(which(names(valLabels) == "0次"),
-    #                  which(names(valLabels) == "1至2次"),
-    #                  which(names(valLabels) == "3至4次"),
-    #                  which(names(valLabels) == "5至6次"),
-    #                  which(names(valLabels) == "7次或以上"))
-    names(valLabels)[names(valLabels) == "0次"] <- "None"
-    names(valLabels)[names(valLabels) == "1至2次"] <- "1-2 times"
-    names(valLabels)[names(valLabels) == "3至4次"] <- "3-4 times"
-    names(valLabels)[names(valLabels) == "5至6次"] <-  "5-6 times"
-    names(valLabels)[names(valLabels) == "7次或以上"] <-  "7 times or more"
-    val_labels(df[[var]]) <- valLabels
-    df[[var]] <- to_factor(df[[var]])
-  }
-  
-  var <- "diet_dp1"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "每餐0碗"),
-                   which(names(valLabels) == "每餐約小半碗或以下"),
-                   which(names(valLabels) == "每餐約半碗"),
-                   which(names(valLabels) == "每餐約大半碗至1碗"),
-                   which(names(valLabels) == "每餐多於1碗"))
-  
-  names(valLabels)[names(valLabels) == "每餐多於1碗"] <- "> 1 bowl"
-  names(valLabels)[names(valLabels) == "每餐約大半碗至1碗"] <- "0.5-1 bowl"
-  names(valLabels)[names(valLabels) == "每餐約小半碗或以下"] <- "< 0.5 bowl"
-  names(valLabels)[names(valLabels) == "每餐約半碗"] <- "0.5 bowl"
-  names(valLabels)[names(valLabels) == "每餐0碗"] <- "None"
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  
-  var <- "diet_dp3"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "每天0碗"),
-                   which(names(valLabels) == "每天約小半碗或以下"),
-                   which(names(valLabels) == "每天約半碗"),
-                   which(names(valLabels) == "每天約1碗"),
-                   which(names(valLabels) == "每天多於1碗"))
-  names(valLabels)[names(valLabels) == "每天0碗"] <- "None"
-  names(valLabels)[names(valLabels) == "每天多於1碗"] <- "> 1 bowl"
-  names(valLabels)[names(valLabels) == "每天約1碗"] <- "1 bowl"
-  names(valLabels)[names(valLabels) == "每天約小半碗或以下"] <- "< 0.5 bowl"
-  names(valLabels)[names(valLabels) == "每天約半碗"] <- "0.5 bowl"
-  
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  var <- "diet_dp4"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "每天0份"),
-                   which(names(valLabels) == "每天約少於1份﹙即少於半碗切粒水果或少於1個中型水果或少於1湯匙乾果或少於半條香蕉或"),
-                   which(names(valLabels) == "每天約1份 ﹙即半碗切粒水果或1個中型水果或1湯匙乾果或半條香蕉或大半杯鮮榨果汁﹚"),
-                   which(names(valLabels) == "每天約2份 ﹙即1碗切粒水果或2個中型水果或2湯匙乾果或1條香蕉或1.5杯鮮榨果汁﹚"),
-                   which(names(valLabels) == "每天多於2份 ﹙即多於1碗切粒水果或多於2個中型水果或多於2湯匙乾果或多於1條香蕉或多於"))
-  names(valLabels)[names(valLabels) == "每天0份"] <- "None"
-  names(valLabels)[names(valLabels) == "每天多於2份 ﹙即多於1碗切粒水果或多於2個中型水果或多於2湯匙乾果或多於1條香蕉或多於"] <- "> 2 servings"
-  names(valLabels)[names(valLabels) == "每天約1份 ﹙即半碗切粒水果或1個中型水果或1湯匙乾果或半條香蕉或大半杯鮮榨果汁﹚"] <- "1 serving"
-  names(valLabels)[names(valLabels) == "每天約2份 ﹙即1碗切粒水果或2個中型水果或2湯匙乾果或1條香蕉或1.5杯鮮榨果汁﹚"] <- "2 servings"
-  names(valLabels)[names(valLabels) == "每天約少於1份﹙即少於半碗切粒水果或少於1個中型水果或少於1湯匙乾果或少於半條香蕉或"] <- "< 1 serving"
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  var <- "diet_dp5"
-  df[[var]] <- to_labelled(to_factor(df[[var]]))
-  valLabels <- val_labels(df[[var]])
-  label_order <- c(which(names(valLabels) == "每天0份"),
-                   which(names(valLabels) == "每天約少於1份"),
-                   which(names(valLabels) == "每天約1份"),
-                   which(names(valLabels) == "每天約2至3份"),
-                   which(names(valLabels) == "每天多於3份"))
-  names(valLabels)[names(valLabels) == "每天0份"] <- "None"
-  names(valLabels)[names(valLabels) == "每天多於3份"] <- "> 3 servings"
-  names(valLabels)[names(valLabels) == "每天約1份"] <- "1 serving"
-  names(valLabels)[names(valLabels) == "每天約2至3份"] <- "2-3 servings"
-  names(valLabels)[names(valLabels) == "每天約少於1份"] <- "< 1 serving"
-  
-  val_labels(df[[var]]) <- valLabels[label_order]
-  df[[var]] <- to_factor(df[[var]])
-  
-  
-  return(df)
-}
 
 allVars <- c("use_health_service_8", "amic", "amic_sum", 
              "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
