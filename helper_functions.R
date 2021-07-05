@@ -445,7 +445,7 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
 
-gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE){ 
+gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE, decimal_places = 3){ 
   require(lmerTest)
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
   row_count <- 1
@@ -461,7 +461,7 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     row_count <- row_count + 1
     
     icc <- iferror(performance::icc(fit)[[1]], NA)
-    icc <- round_format(icc, 3)
+    icc <- round_format(icc, decimal_places)
     table[row_count, 1] <- "ICC"
     table[row_count, col_count] <-  icc
     row_count <- row_count + 1
@@ -473,12 +473,12 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     
     if(adjusted_r2){
       adj_r2 <- iferror(1 - ((summary(fit)$deviance/-2)-(length(fit$coeff)-1)) / (summary(fit)$null.deviance/-2), NA)
-      adj_r2 <- round_format(adj_r2, 3)
+      adj_r2 <- round_format(adj_r2, decimal_places)
       table[row_count, 1] <- "Adjusted R2"
       table[row_count, col_count] <-  adj_r2
     } else {
       r2 <- iferror(1 - ((summary(fit)$deviance/-2)) / (summary(fit)$null.deviance/-2), NA)
-      r2 <- round_format(r2, 3)
+      r2 <- round_format(r2, decimal_places)
       table[row_count, 1] <- "R2"
       table[row_count, col_count] <-  r2
     }
@@ -490,7 +490,7 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     table[row_count, col_count] <-  n
     row_count <- row_count + 1
     
-    concordance <- iferror(round_format(summary(fit)$concordance[[1]], 3), NA)
+    concordance <- iferror(round_format(summary(fit)$concordance[[1]], decimal_places), NA)
     table[row_count, 1] <- "Concordance"
     table[row_count, col_count] <-  concordance
     
@@ -503,11 +503,11 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     row_count <- row_count + 1
     
     if(adjusted_r2){
-      adj_r2 <- iferror(round_format(summary(fit)$adj.r.squared, 3), NA)
+      adj_r2 <- iferror(round_format(summary(fit)$adj.r.squared, decimal_places), NA)
       table[row_count, 1] <- "Adjusted R2"
       table[row_count, col_count] <-  adj_r2
     } else {
-      r2 <- iferror(round_format(summary(fit)$r.squared, 3), NA)
+      r2 <- iferror(round_format(summary(fit)$r.squared, decimal_places), NA)
       table[row_count, 1] <- "R2"
       table[row_count, col_count] <-  r2
     }
@@ -543,18 +543,18 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     upperCI <- iferror(beta + qnorm(0.975) * se, NA)
     p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
     
-    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
+    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
     if (show_p){
       table[row_count, col_count] <-  round_format(p_value, 4)
     } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
-      table[row_count, col_count] <-  starred_p(p_value, 3, exp(beta))
+      table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
       if (show_CI){
-        table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), 3), ", ", round_format(exp(upperCI), 3))
+        table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
       }
     } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
-      table[row_count, col_count] <-  paste0(round_format(lowerCI, 3), ", ", round_format(upperCI, 3))
+      table[row_count, col_count] <-  paste0(round_format(lowerCI, decimal_places), ", ", round_format(upperCI, decimal_places))
     } else {
-      table[row_count, col_count] <-  starred_p(p_value, 3, beta)
+      table[row_count, col_count] <-  starred_p(p_value, decimal_places, beta)
     }
     
     row_count <- row_count + 1
@@ -564,13 +564,13 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
   return(table)
 }
 
-combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE){
+combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
-      table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
+      table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
       next
     }
-    new_table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate) 
+    new_table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
     dep_vars <- names(table)
     dep_var <- names(new_table)[2]
     names(table) <- c("X1",rep(2:ncol(table)))

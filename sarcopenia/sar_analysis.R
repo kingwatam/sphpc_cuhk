@@ -251,7 +251,7 @@ for (i in 1:nrow(cor_matrix)){
     # cor_matrix[[i,j]] %>% print()
     # cor_matrix_p[[i,j]] %>% print()
   if (i!=j){
-    cor_matrix[i,j] <- starred_p(p_value = as.numeric(cor_matrix_p[i,j]), decimal_places = 3,
+    cor_matrix[i,j] <- starred_p(p_value = as.numeric(cor_matrix_p[i,j]), decimal_places = 2,
                                  related_value = as.numeric(cor_matrix[i,j]))
   }
   }
@@ -271,7 +271,8 @@ table <- combine_tables(NULL,
 )
 # standardized
 table <- combine_tables(NULL, 
-                        show_CI = TRUE,
+                        # show_CI = TRUE, 
+                        decimal_places = 2,
                         lm(scale(sarc_f.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0), data = dfwide),
                         lm(scale(sarc_f.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0)+scale(moca.0), data = dfwide),
                         lm(scale(sarc_f.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0)+scale(moca.1), data = dfwide),
@@ -291,7 +292,8 @@ table <- combine_tables(NULL,
 )
 # standardized
 table <- combine_tables(NULL,
-                        show_CI = TRUE,
+                        show_CI = TRUE, 
+                        decimal_places = 2,
                         lm(scale(hgs.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0), data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(hgs.0)+scale(moca.0), data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(hgs.0)+scale(moca.1), data = dfwide),
@@ -320,7 +322,7 @@ table <- combine_tables(NULL,
 # standardized
 table <- combine_tables(NULL,
                         show_CI = TRUE,
-                        exponentiate = TRUE, 
+                        exponentiate = TRUE, decimal_places = 2,
                         lm(scale(moca.0)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(sarc_f.0), data = dfwide),
                         lm(scale(moca.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0)+scale(sarc_f.0), data = dfwide),
                         lm(scale(moca.1)~ 1+age_group.0+female+scale(CD)+scale(eduf0)+scale(moca.0)+scale(sarc_f.1), data = dfwide),
@@ -353,7 +355,7 @@ table <- combine_tables(NULL,
 table <- combine_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
                         show_CI = TRUE,
-                        exponentiate = TRUE, 
+                        exponentiate = TRUE,  decimal_places = 2,
                         coxph(Surv(time, mci.1) ~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(sarc_f.0), data =  dfwide),
                         coxph(Surv(time, mci.1)~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(sarc_f.1), data =  dfwide),
                         coxph(Surv(time, mci.1)~1+age_group.0+female+scale(CD)+scale(eduf0)+mci.0+scale(hgs.0), data =  dfwide),

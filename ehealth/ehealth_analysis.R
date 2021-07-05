@@ -25,7 +25,7 @@ df %>% select(starts_with("diet_")) %>% colnames(.) -> diet_
 df %>% select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 
 # restrict sample to age >= 60 ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-06-27'),]
+df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-07-04'),]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age >= 60),]
 
