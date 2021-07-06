@@ -157,6 +157,7 @@ for (i in c("wbs"
   rm(df.tmp)
 }
 
+
 vars <- c("member_id", "gender", "dob", "wbs_survey_date",
           "marital", "educ", "living_status", "housing_type",
           "risk_score", "risk_level", "digital")
@@ -166,6 +167,27 @@ wbs <- wbs[wbs$member_id %!in% wbs2$member_id, ] # keep members not found in lat
 wbs$All_forms_completed_date <- NA
 names(wbs2)[names(wbs2)=="Memory"] <- "AMIC"
 names(wbs2)[names(wbs2)=="Memory_score"] <- "AMIC_score"
+
+wbs2$risk_level <- car::recode(wbs2$risk_level, "
+'L' = 1;
+'M' = 2;
+'H' = 3
+")
+
+# copy labels from WBS to WBS2
+for (var in names(wbs2)){
+  if (class(wbs[[var]])[1] == "haven_labelled" &
+      var %!in% c("SAR_total")){
+    if (typeof(wbs[[var]])[1] == "double"){
+      wbs2[[var]] <- labelled(as.numeric(wbs2[[var]]), val_labels(wbs[[var]]))
+    } else if (typeof(wbs[[var]])[1] == "character"){
+      wbs2[[var]] <- labelled(wbs2[[var]], val_labels(wbs[[var]]))
+    }
+  } else if (class(wbs[[var]])[1] == "numeric" |
+             var %in% c("SAR_total")){
+    wbs2[[var]] <- as.numeric(wbs2[[var]])
+  } 
+}
 
 wbs2 <- wbs2[order(wbs2$wbs_survey_date),] # order by WBS survey date
 wbs2 <- distinct(wbs2, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
