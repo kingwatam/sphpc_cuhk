@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-07-05_1049.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-07-12_1048.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -24,7 +24,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210705_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210712_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -49,8 +49,8 @@ df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)] <-
 df$ehealth_eval_timestamp <- lubridate::ymd_hms(df$ehealth_eval_timestamp, tz = "Asia/Hong_Kong", quiet =  TRUE)
 
 # # check duplicates
-# wbs %>%
-#   add_count(member_id) %>%
+# df %>%
+#   add_count(member_id, evaluation_event) %>%
 #   filter(n >= 2) %>% View()
 
 # scoring <- function(df){
