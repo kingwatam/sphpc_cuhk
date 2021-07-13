@@ -31,8 +31,8 @@
 ## get_freqtable() returns up to 3-way frequency table as a data frame
 ## eval_() simplifies eval(parse()) globally, while concatenating strings so that paste/sprintf functions are not needed. Beware of certain problems since it evaluates objects from the global environment
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
-## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_table()
-## gen_table() generates the results for each model to be used by combine_tables() 
+## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
+## gen_reg() generates the results for each model to be used by combine_tables() 
 ## save_() works the same as save() with user-defined names for objects
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
@@ -445,7 +445,7 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
 
-gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE, decimal_places = 3){ 
+gen_reg <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3){ 
   require(lmerTest)
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
   row_count <- 1
@@ -539,8 +539,15 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     } else {
       se <-  iferror(summary(fit)$coef[var, 2], NA)
     }
-    lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
-    upperCI <- iferror(beta + qnorm(0.975) * se, NA)
+    
+    if (show_CI){
+    alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
+    # lowerCI <- iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+    lowerCI <- confint(fit, var, level=(1-alpha))[1] # this is slower than qnorm
+    # upperCI <- iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+    upperCI <- confint(fit, var, level=(1-alpha))[2]
+    }
+    
     p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
     
     # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
@@ -549,6 +556,7 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
     } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
       table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
       if (show_CI){
+
         table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
       }
     } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
@@ -567,10 +575,10 @@ gen_table <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE,
 combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
-      table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      table <- gen_reg(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
       next
     }
-    new_table <- gen_table(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+    new_table <- gen_reg(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
     dep_vars <- names(table)
     dep_var <- names(new_table)[2]
     names(table) <- c("X1",rep(2:ncol(table)))
