@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-07-12_1048.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-07-20_1033.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -24,7 +24,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210712_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210720_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -48,18 +48,18 @@ df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)] <-
 
 df$ehealth_eval_timestamp <- lubridate::ymd_hms(df$ehealth_eval_timestamp, tz = "Asia/Hong_Kong", quiet =  TRUE)
 
-# # check duplicates
-# df %>%
-#   add_count(member_id, evaluation_event) %>%
-#   filter(n >= 2) %>% View()
+# check duplicates
+df %>%
+  add_count(member_id, evaluation_event) %>%
+  filter(n >= 2) %>% nrow()
 
 # scoring <- function(df){
-  df %>% select(starts_with("amic") & ends_with(sprintf("%s", 1:5))) %>% colnames(.) -> amic_
-  df %>% select(starts_with("self_efficacy_")) %>% colnames(.) -> self_efficacy_ 
-  df %>% select(starts_with("pase_c_") & ends_with("score")) %>% colnames(.) -> pase_c_
-  df %>% select(starts_with("matrix_diet")) %>% colnames(.) -> matrix_diet_
-  df %>% select(starts_with("diet_")) %>% colnames(.) -> diet_
-  df %>% select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
+  df %>% dplyr::select(starts_with("amic") & ends_with(sprintf("%s", 1:5))) %>% colnames(.) -> amic_
+  df %>% dplyr::select(starts_with("self_efficacy_")) %>% colnames(.) -> self_efficacy_ 
+  df %>% dplyr::select(starts_with("pase_c_") & ends_with("score")) %>% colnames(.) -> pase_c_
+  df %>% dplyr::select(starts_with("matrix_diet")) %>% colnames(.) -> matrix_diet_
+  df %>% dplyr::select(starts_with("diet_")) %>% colnames(.) -> diet_
+  df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
   
   # replace certain labels with NAs
   df[] <- lapply(df[], function(x){
