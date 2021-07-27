@@ -26,8 +26,11 @@ df %>% dplyr::select(starts_with("matrix_diet")) %>% colnames(.) -> matrix_diet_
 df %>% dplyr::select(starts_with("diet_")) %>% colnames(.) -> diet_
 df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 
+df$pase_c_11_1 <- ifelse(df$pase_c_11 == 0 , 0, df$pase_c_11_1)
+df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
+
 # set variable names ----
-var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (HK$)"),  
+var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=better)"),  
                        c("amic", "Memory symptoms, proportion of AMIC >= 3 (lower=better)"),  
                        c("amic_sum", "Memory symptoms score (AMIC, lower=better)"), 
                        c("self_efficacy", "Self-efficacy - Total"), 
@@ -36,30 +39,30 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (HK$)")
                        c("self_efficacy_3", "Self-efficacy - Social support"),
                        c("self_efficacy_4", "Self-efficacy - Healthy diet"),
                        c("self_efficacy_5", "Self-efficacy - Exercise"),
-                       c("eq5d", "Health related quality of life (EQ-5D-5L)"),
-                       c("eq5d_mobility", "Health related quality of life - Mobility"),
-                       c("eq5d_self_care", "Health related quality of life - Self care"),
-                       c("eq5d_usual_activity", "Health related quality of life - Usual activity"),
-                       c("eq5d_pain_discomfort", "Health related quality of life - Pain/discomfort (higher=better)"),
-                       c("eq5d_anxiety_depression", "Health related quality of life - Anxiety/depression"),
-                       c("eq5d_health", "Self-rated Health (EQ VAS)"),
+                       c("eq5d", "Health-related quality of life (EQ-5D-5L)"),
+                       c("eq5d_mobility", "Health-related quality of life - Mobility"),
+                       c("eq5d_self_care", "Health-related quality of life - Self care"),
+                       c("eq5d_usual_activity", "Health-related quality of life - Usual activity"),
+                       c("eq5d_pain_discomfort", "Health-related quality of life - Pain/discomfort (higher=better)"),
+                       c("eq5d_anxiety_depression", "Health-related quality of life - Anxiety/depression (higher=better)"),
+                       c("eq5d_health", "Self-rated health (EQ VAS)"),
                        c("satisfaction_1", "Satisfaction with all health care professionals"),  
                        c("satisfaction_2", "Satisfaction with eHealth health care and centre staff"),  
                        c("pase_c", "Physical activity score	(PASE-C)"),  
-                       c("pase_c_1", "Sitting per week (categorical)"),  
-                       c("pase_c_1_2", "Sitting per day (categorical)"),  
+                       c("pase_c_1", "Sitting per week"),  
+                       c("pase_c_1_2", "Sitting per day"),  
                        c("pase_c_11", "Proportion of walking as exercise daily"),  
                        c("pase_c_11_1", "Number of streets walked as exercise"),  
                        c("pase_c_12_1", "Proportion of walking in general daily"),  
-                       c("pase_c_12", "Number of streets walked (excl. exercise)"),  
-                       c("matrix_diet_dh3", "High-sugar/high-fat snacks per week (categorical)"),  
-                       c("matrix_diet_dh4", "Processed/canned foods (categorical)"),  
-                       c("matrix_diet_dh7", "Three main meals daily (categorical)"),  
-                       c("matrix_diet_dh8", "Three meals at regular hours (categorical)"),  
-                       c("diet_dp1", "Amount of grains in a meal (categorical)"),  
-                       c("diet_dp3", "Amount of vegetables per day (categorical)"),  
-                       c("diet_dp4", "Amount of fruit per day (categorical)"),  
-                       c("diet_dp5", "Amount of meat/poultry/fish/egg per day (categorical)")), dim = c(2,33)))
+                       c("pase_c_12", "Number of streets walked in general"),  
+                       c("matrix_diet_dh3", "Amount of high-sugar/high-fat snacks"),  
+                       c("matrix_diet_dh4", "Amount of processed/canned foods"),  
+                       c("matrix_diet_dh7", "Three main meals daily"),  
+                       c("matrix_diet_dh8", "Three meals at regular hours"),  
+                       c("diet_dp1", "Amount of grains in a meal"),  
+                       c("diet_dp3", "Amount of vegetables per day"),  
+                       c("diet_dp4", "Amount of fruit per day"),  
+                       c("diet_dp5", "Amount of meat/poultry/fish/egg per day")), dim = c(2,33)))
 
 # restrict sample to age >= 60 ----
 # df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-07-04'),]
@@ -634,16 +637,23 @@ gen_table(df, allVars[], ordinalVars, medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
 # baseline & follow-up in same period ----
-df <- df[, c(1:105)]
-temp <- df[as.Date(df$ehealth_eval_timestamp) >= as.Date('2021-04-07') & df$time == 1 |
-               (as.Date(df$ehealth_eval_timestamp) <= as.Date('2020-11-20') | 
-                  as.Date(df$ehealth_eval_timestamp) >= as.Date('2021-04-07'))  & df$time == 0 , ]
+temp <- df[, c(1:105)]
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
+               (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') | 
+                  as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
 
 temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
-temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) >= as.Date('2021-04-07') & n == 1 & 
+temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) >= as.Date('2021-03-28') & n == 1 & 
                                                     member_id %!in% unique(temp1$member_id) & time == 0)
 temp <- rbind(temp1, temp2) 
 rm(temp1, temp2)
+
+# # Obtain a random sub-sample of those with both T0 & T1
+# set.seed(646321)
+# selected_id <- unique(sample(temp$member_id[temp$time == 1], size = 500))
+# temp <- temp[temp$time == 0 |
+#                (temp$time == 1 & temp$member_id %in% selected_id), ] 
+
 # temp <- df[as.Date(df$ehealth_eval_timestamp) >= as.Date('2021-03-28')
 #            # & as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-05-15')
 #            ,]
@@ -680,8 +690,8 @@ get_descstat <- function(df){
 
 library(MatchIt)
 library(optmatch) # for optimal matching
-library(Matching) # for genetic matchin
-library(rgenoud) # for genetic matchin
+# library(Matching) # for genetic matchin
+# library(rgenoud) # for genetic matchin
 
 select_vars <-  c("time", "gender", "age", "living_status",
                   # "marital", "educ", "housing_type",
@@ -695,7 +705,9 @@ temp$housing_type <- to_factor(temp$housing_type)
 #                  data = temp, method = "optimal"
 #                  # , distance='mahalanobis'
 #                  )
-matched.out <- matchit(time ~ gender + age + housing_type + risk_score,
+matched.out <- matchit(time ~ gender + age + 
+                         housing_type +
+                         risk_score,
                  data = temp, method = "optimal"
                  # , caliper = 0.25
                  # , distance='mahalanobis'
@@ -756,50 +768,56 @@ df_matched$covid <- ifelse(df_matched$int == 0 & df_matched$time == 0, 1,
                                ifelse(df_matched$int == 1 & df_matched$time == 1, 1, NA)))
 df_matched$int <- ifelse(df_matched$covid == 0 & df_matched$int == 1, 0, df_matched$int) # set int group at baseline to be pre-covid baseline
 
-# table <- combine_tables(NULL, 
+complete_cases <- function(df, var){
+  # df <- df[complete.cases(df[var]),]
+  # df <- df %>% add_count(subclass) %>% filter(n == 3)
+  return(df)
+}
+
+# table <- combine_tables(NULL,
 #                         exponentiate = FALSE,
-#                         # show_CI = 0.83,
-#                         lmer(use_health_service_8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(amic~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         show_CI = 0.83,
+#                         lmer(use_health_service_8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "use_health_service_8")),
+#                         lmer(amic~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic")),
 #                         # glmer(amic~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(amic_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(amic_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic_sum")),
 #                         # clmm(as.factor(amic_sum) ~ covid+int + (1 | subclass), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-#                         lmer(self_efficacy~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(self_efficacy_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(self_efficacy_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(self_efficacy_3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(self_efficacy_4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(self_efficacy_5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(self_efficacy~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy")),
+#                         lmer(self_efficacy_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_1")),
+#                         lmer(self_efficacy_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_2")),
+#                         lmer(self_efficacy_3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_3")),
+#                         lmer(self_efficacy_4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_4")),
+#                         lmer(self_efficacy_5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_5")),
 # 
-#                         lmer(eq5d~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_mobility~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_self_care~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_usual_activity~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_pain_discomfort~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_anxiety_depression~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(eq5d_health~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(eq5d~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d")),
+#                         lmer(eq5d_mobility~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_mobility")),
+#                         lmer(eq5d_self_care~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_self_care")),
+#                         lmer(eq5d_usual_activity~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_usual_activity")),
+#                         lmer(eq5d_pain_discomfort~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_pain_discomfort")),
+#                         lmer(eq5d_anxiety_depression~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_anxiety_depression")),
+#                         lmer(eq5d_health~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_health")),
 # 
-#                         lmer(satisfaction_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(satisfaction_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         
-#                         lmer(pase_c~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(pase_c_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(pase_c_1_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(pase_c_11~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(satisfaction_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_1")),
+#                         lmer(satisfaction_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_2")),
+# 
+#                         lmer(pase_c~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c")),
+#                         lmer(pase_c_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1")),
+#                         lmer(pase_c_1_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1_2")),
+#                         lmer(pase_c_11~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11")),
 #                         # glmer(pase_c_11~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(pase_c_11_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(pase_c_12_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(pase_c_11_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11_1")),
+#                         lmer(pase_c_12_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12_1")),
 #                         # glmer(pase_c_12_1~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(pase_c_12~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
+#                         lmer(pase_c_12~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12")),
 # 
-#                         lmer(matrix_diet_dh3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(matrix_diet_dh4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(matrix_diet_dh7~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(matrix_diet_dh8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(diet_dp1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(diet_dp3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(diet_dp4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched),
-#                         lmer(diet_dp5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched)
+#                         lmer(matrix_diet_dh3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh3")),
+#                         lmer(matrix_diet_dh4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh4")),
+#                         lmer(matrix_diet_dh7~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh7")),
+#                         lmer(matrix_diet_dh8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh8")),
+#                         lmer(diet_dp1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp1")),
+#                         lmer(diet_dp3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp3")),
+#                         lmer(diet_dp4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp4")),
+#                         lmer(diet_dp5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5"))
 # )
 # table %>% clipr::write_clip()
 
@@ -905,7 +923,7 @@ gen_coef <- function(model, coef_name, CI = 0.83){
   results <- rbind(results0, results1, results2, results3, results4, results5, results6)
   return(results)
 }
-    
+
 results <- data.frame()
 for (var in allVars){
   print(var)
@@ -915,9 +933,8 @@ for (var in allVars){
 results$group <- as.factor(results$group)
 
 library(ggpubr)
-library(pBrackets)
 library(ggrepel) # geom_text_repel
-library(ungeviz) # stat_confidence_density
+# library(ungeviz) # stat_confidence_density
 
 results$direction <- ifelse(results$coef < 0, "first", "last") # first = down, last = up
 results$angle <- ifelse(abs(results$coef) < 0.01, 40, 40)
@@ -933,17 +950,17 @@ green <- "#4f9e78"
 blue <- "#98a2da"
 yellow <- "#ffe873"
 
-setwd(sprintf("~%s/ehealth/slides", setpath))
-pdf("plot_effects.pdf", height = 28/2.54/1.6, width = 50/2.54/1.6)
+# setwd(sprintf("~%s/ehealth/slides", setpath))
+# pdf("plot_effects.pdf", height = 28/2.54/1.6, width = 50/2.54/1.6)
+setwd(sprintf("~%s/ehealth/slides/charts/with_titles", setpath))
 for (var in allVars){
-  # var <- allVars[3]
-  
   plot <- results[results$coef_name == var,] %>%
     ggplot(aes(x = as.factor(covid), y = estimate, group = int)) +
-    labs(title=var_names[which(var_names==var), 2],
-         x = "", y = var_names[which(var_names==var), 2], 
-         caption = "* p<0.05; ** p<0.01; *** p<0.001",
-         color = "") +
+    labs(
+      title=var_names[which(var_names==var), 2],
+      x = "", y = var_names[which(var_names==var), 2], 
+      # caption = "* p<0.05; ** p<0.01; *** p<0.001",
+      color = "") +
     expand_limits(x = factor(c(seq(0, 1.5, by = 0.5)))) +
     scale_x_discrete(labels = c("Before", "COVID-19 4th wave", "After", "", ""), breaks = c(0, 0, 1, 0, 0)) +
     geom_linerange(data = results[results$coef_name == var & results$covid != 1.3 & results$legend %in% c("Baseline/Control", "Follow-up"),], aes(ymin = lowerCI, ymax = upperCI, 
@@ -952,10 +969,10 @@ for (var in allVars){
                    show.legend = TRUE)  +
     scale_color_manual(values=c("Baseline/Control" = blue, "Follow-up" = yellow)) +
     geom_text_repel(data = results[results$coef_name == var & results$covid == 1.3,], aes(label=group), hjust = -1, vjust = 0, 
-                    position = position_dodge(width = 0.4),
+                    position = position_dodge(width = 0.3),
                     color = c(red, green)[results$improve[results$coef_name == var
                                                           & results$covid == 1.3]+1],
-                    segment.color = 'transparent', family = 'sans', size = 4.2
+                    segment.color = 'transparent', family = 'sans', size = 4.4
     ) +
     geom_point(data = results[results$coef_name == var & results$covid != 1.3,], size=5, position = position_dodge(width = 0.4), shape = 45) +
     # geom_errorbar(data = results[results$coef_name == var & results$covid == 1.3,], aes(ymin = lowerCI, ymax = upperCI), width = 0.05,
@@ -968,7 +985,7 @@ for (var in allVars){
              arrow = arrow(type = 'closed', ends = results$direction[results$coef_name == var & results$covid == 1.3 & results$int == 0],
                            angle =  results$angle[results$coef_name == var & results$covid == 1.3 & results$int == 0],
                            length = unit(results$length[results$coef_name == var & results$covid == 1.3 & results$int == 0],"cm"))) +
-    annotate("segment", x = 4, xend = 4, y = results$lowerCI[results$coef_name == var
+    annotate("segment", x = 4.0, xend = 4.0, y = results$lowerCI[results$coef_name == var
                                                                  & results$covid == 1.3 & results$int == 1], yend = results$upperCI[results$coef_name == var
                                                                                                                                     & results$covid == 1.3 & results$int == 1],
              color = c(red, green)[results$improve[results$coef_name == var
@@ -983,24 +1000,29 @@ for (var in allVars){
                                      y = (min(estimate, na.rm = TRUE) +
                                             max(estimate, na.rm = TRUE))/2, label="COVID-19 4th wave"),
               family="sans", 
-              # fontface= "italic", 
-              color = "#888888", size = 5.3) +
-    theme(text = element_text(size=rel(5)),
-          strip.text.x = element_text(size=rel(3*0.85)),
-          strip.text.y = element_text(size=rel(3*0.85))) +
+              fontface= "italic",
+              color = "#888888", size = 6) +
     theme_minimal() + theme(plot.title = element_text(hjust = 0.5)
                             # , legend.position="none"
     )   + 
-    theme(legend.position = c(1, 0.9),legend.justification = c(2, 0))
+    theme(legend.position = c(1, 0.9),legend.justification = c(1.1, 0)) +
+    theme(plot.title = element_text(size = 20),
+          legend.text = element_text(size=16), 
+          axis.text.x = element_text(size=16), 
+          axis.text.y = element_text(size=16), 
+          axis.title = element_text(size = 14),
+          plot.caption =  element_text(size = 12))
   
-  print(plot)
+  ggsave(sprintf("%s.png", var), plot = plot, height =  18, width =  32, units = "cm", dpi = 300, bg = "White")
+  # print(plot)
 }
 dev.off()
 
 
+# testing different changes to the plot ----
 results_test <- data.frame()
-var <- "eq5d_pain_discomfort"
-# var <- "satisfaction_1"
+# var <- "eq5d_pain_discomfort"
+var <- "use_health_service_8"
 # var <- "pase_c"
 # var <- "matrix_diet_dh4"
 model <- lmer(get(var)~ 1+covid+int+ (1| subclass) , REML = TRUE, data = df_matched)
@@ -1011,6 +1033,7 @@ plot_test <- function(results){
   results$angle <- ifelse(abs(results$coef) < 0.01, 40, 40)
   results$length <- ifelse(abs(results$coef) < 0.01, 0.3, 0.3)
   # results$int_colour <- ifelse(results$int == 1, "#ffe873", "#98a2da")
+  vars_reverse <- c("use_health_service_8", "amic", "amic_sum", "pase_c_1", "pase_c_1_2", "matrix_diet_dh3", "matrix_diet_dh4")
   results$improve <- ifelse(results$coef_name %in% vars_reverse & results$coef < 0, 1, 
                             ifelse(results$coef_name %in% vars_reverse & results$coef >= 0, 0, 
                                    ifelse(results$coef_name %!in% vars_reverse & results$coef < 0, 0, 
@@ -1023,23 +1046,24 @@ plot_test <- function(results){
   
   plot <- results[results$coef_name == var,] %>%
     ggplot(aes(x = as.factor(covid), y = estimate, group = int)) +
-    labs(title=var_names[which(var_names==var), 2],
-         x = "", y = var_names[which(var_names==var), 2], 
-         caption = "* p<0.05; ** p<0.01; *** p<0.001",
-         color = "") +
+    labs(
+      title=var_names[which(var_names==var), 2],
+      x = "", y = var_names[which(var_names==var), 2], 
+      # caption = "* p<0.05; ** p<0.01; *** p<0.001",
+      color = "") +
     expand_limits(x = factor(c(seq(0, 1.5, by = 0.5)))) +
     scale_x_discrete(labels = c("Before", "COVID-19 4th wave", "After", "", ""), breaks = c(0, 0, 1, 0, 0)) +
     geom_linerange(data = results[results$coef_name == var & results$covid != 1.3 & results$legend %in% c("Baseline/Control", "Follow-up"),], aes(ymin = lowerCI, ymax = upperCI, 
-                                                                                         color = legend), size = 2.7, alpha = 0.9,
+                                                                                                                                                  color = legend), size = 2.7, alpha = 0.9,
                    position = position_dodge(width = 0.4),
                    show.legend = TRUE)  +
     scale_color_manual(values=c("Baseline/Control" = blue, "Follow-up" = yellow)) +
     geom_text_repel(data = results[results$coef_name == var & results$covid == 1.3,], aes(label=group), hjust = -1, vjust = 0, 
                     position = position_dodge(width = 0.3),
                     color = c(red, green)[results$improve[results$coef_name == var
-                                                              & results$covid == 1.3]+1],
-                    segment.color = 'transparent', family = 'sans', size = 4.2
-                    ) +
+                                                          & results$covid == 1.3]+1],
+                    segment.color = 'transparent', family = 'sans', size = 4.4
+    ) +
     geom_point(data = results[results$coef_name == var & results$covid != 1.3,], size=5, position = position_dodge(width = 0.4), shape = 45) +
     # geom_errorbar(data = results[results$coef_name == var & results$covid == 1.3,], aes(ymin = lowerCI, ymax = upperCI), width = 0.05,
     #               position = position_dodge(width = 0.2))  +
@@ -1047,15 +1071,15 @@ plot_test <- function(results){
                                                                  & results$covid == 1.3 & results$int == 0], yend = results$upperCI[results$coef_name == var
                                                                                                                                     & results$covid == 1.3 & results$int == 0],
              color = c(red, green)[results$improve[results$coef_name == var
-                                                       & results$covid == 1.3 & results$int == 0]+1], 
+                                                   & results$covid == 1.3 & results$int == 0]+1], 
              arrow = arrow(type = 'closed', ends = results$direction[results$coef_name == var & results$covid == 1.3 & results$int == 0],
                            angle =  results$angle[results$coef_name == var & results$covid == 1.3 & results$int == 0],
                            length = unit(results$length[results$coef_name == var & results$covid == 1.3 & results$int == 0],"cm"))) +
-    annotate("segment", x = 5.2, xend = 5.2, y = results$lowerCI[results$coef_name == var
+    annotate("segment", x = 4.0, xend = 4.0, y = results$lowerCI[results$coef_name == var
                                                                  & results$covid == 1.3 & results$int == 1], yend = results$upperCI[results$coef_name == var
                                                                                                                                     & results$covid == 1.3 & results$int == 1],
              color = c(red, green)[results$improve[results$coef_name == var
-                                                       & results$covid == 1.3 & results$int == 1]+1], 
+                                                   & results$covid == 1.3 & results$int == 1]+1], 
              arrow = arrow(type = 'closed', ends = results$direction[results$coef_name == var & results$covid == 1.3 & results$int == 1],
                            angle =  results$angle[results$coef_name == var & results$covid == 1.3 & results$int == 1],
                            length = unit(results$length[results$coef_name == var & results$covid == 1.3 & results$int == 1],"cm"))) +
@@ -1067,14 +1091,17 @@ plot_test <- function(results){
                                             max(estimate, na.rm = TRUE))/2, label="COVID-19 4th wave"),
               family="sans", 
               fontface= "italic",
-              color = "#888888", size = 5.3) +
-    theme(text = element_text(size=rel(5)),
-          strip.text.x = element_text(size=rel(3*0.85)),
-          strip.text.y = element_text(size=rel(3*0.85))) +
+              color = "#888888", size = 6) +
     theme_minimal() + theme(plot.title = element_text(hjust = 0.5)
                             # , legend.position="none"
-                            )   + 
-    theme(legend.position = c(1, 0.9),legend.justification = c(2, 0))
+    )   + 
+    theme(legend.position = c(1, 0.9),legend.justification = c(1.1, 0)) +
+    theme(plot.title = element_text(size = 20),
+          legend.text = element_text(size=16), 
+          axis.text.x = element_text(size=16), 
+          axis.text.y = element_text(size=16), 
+          axis.title = element_text(size = 14),
+          plot.caption =  element_text(size = 12))
   
   return(plot) 
 }
@@ -1135,17 +1162,17 @@ temp <- df
 temp$time <- as.factor(temp$time)
 lab_bl_ctrl <- "Baseline"
 # restrict to those with both T0 & T1
-# lab_bl_ctrl <- "Baseline/Control"
-# temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-04-07') & temp$time == 1 |
-#             (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-20') |
-#                as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-04-07'))  & temp$time == 0 , ]
-# 
-# 
-# temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
-# temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) >= as.Date('2021-04-07') & n == 1 &
-#                                                     member_id %!in% unique(temp1$member_id) & time == 0)
-# temp <- rbind(temp1, temp2)
-# rm(temp1, temp2)
+lab_bl_ctrl <- "Baseline/Control"
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
+            (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') |
+               as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
+
+
+temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
+temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) >= as.Date('2021-03-28') & n == 1 &
+                                                    member_id %!in% unique(temp1$member_id) & time == 0)
+temp <- rbind(temp1, temp2)
+rm(temp1, temp2)
 
 setwd(sprintf("~%s/ehealth", setpath))
 covid <- readRDS("covid_data_hk.rds")
@@ -1155,31 +1182,48 @@ plot_ehealth <-
   scale_fill_manual(
     labels = c(lab_bl_ctrl, "Follow-up"), values = c("#4456bb", "#ffd500")
   ) +
-  labs(title = "eHealth data collection of baseline & 6 months follow-up assessments",
-       x = "", y = "") +
-  geom_histogram(bins = floor(max(temp$ehealth_eval_timestamp)-min(temp$ehealth_eval_timestamp)), alpha=0.55,position="identity") +
+  labs(
+    # title = "Number of assessments over time",
+       x = "", 
+       y = ""
+       ) +
+  geom_histogram(bins = 500, alpha=0.55,position="identity") +
   # geom_jitter(height = 0.25) +
   scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
   theme_minimal() + theme(text = element_text(size=rel(5))) +
-  theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1), legend.text = element_text(size=rel(4)), plot.title = element_text(hjust = 0.5, size=rel(4))) +
-  coord_cartesian(xlim = c(as.Date("2020-08-02"), NA)) 
+  coord_cartesian(xlim = c(as.Date("2020-08-02"), NA)) +
+  theme(plot.title = element_text(size = 26, hjust = 0.5),
+        legend.text = element_text(size=24), 
+        axis.text.x = element_text(size=24, angle=50, vjust = 1, hjust = 1),
+        axis.text.y = element_text(size=20)) 
 
 plot_covid <-
   ggplot(covid, aes(x=as.Date(date), y = new_confirmed)) +
-  labs(title = "COVID daily cases",
-       x = "", y = "", color = "", fill = "") +
+  labs(
+    # title = "COVID-19 cases",
+       x = "", 
+       y = "", 
+       color = "", fill = "") +
   geom_bar(aes(color = "Confirmed cases", fill = "Confirmed cases"), stat='identity', alpha = 0.2) +
   geom_bar(aes(x=as.Date(date), y = new_deaths, color = "Deaths", fill =  "Deaths"), stat='identity') +
   scale_color_manual(values = c("Confirmed cases" = "#BBBBBB", "Deaths" = "#888888")) +
   scale_fill_manual(values = c("Confirmed cases" = "#CCCCCC", "Deaths" = "#999999")) +
   scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
   theme_minimal() + theme(text = element_text(size=rel(5))) +
-  theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1), legend.text = element_text(size=rel(4)), plot.title = element_text(hjust = 0.5, size=rel(4))) +
-  coord_cartesian(xlim = c(as.Date("2020-08-02"), NA)) 
+  coord_cartesian(xlim = c(as.Date("2020-08-02"), NA)) +
+  theme(plot.title = element_text(size = 26, hjust = 0.5),
+      legend.text = element_text(size=24), 
+      # axis.text.x = element_text(size=24, angle=50, vjust = 1, hjust = 1),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(size=20)) 
+
 
 library(patchwork)
+plot_covid/plot_ehealth
 
 Sys.setlocale(locale =  "eng")
 setwd(sprintf("~%s/ehealth/slides", setpath))
-ggsave("T0 vs T1.png", plot = plot_ehealth/plot_covid, height =  42, width =  60, units = "cm", dpi = 300)
-# ggsave("T0 vs T1 (paired).png", plot = plot_ehealth/plot_covid, height =  42, width =  60, units = "cm", dpi = 300)
+# ggsave("T0 vs T1.png", plot = plot_ehealth/plot_covid, height =  40, width =  60, units = "cm", dpi = 300)
+ggsave("T0 vs T1 (paired) & covid.png", plot = plot_covid/plot_ehealth, height =  40, width =  60, units = "cm", dpi = 300, bg = "White")
+ggsave("covid.png", plot = plot_covid, height =  20, width =  60, units = "cm", dpi = 300, bg = "White")
+ggsave("T0 vs T1 (paired).png", plot = plot_ehealth, height =  20, width =  60, units = "cm", dpi = 300, bg = "White")
