@@ -85,7 +85,7 @@ summ <- function(..., showClass = FALSE) { # summ(df$var1, df$var2, ...) or summ
     summary <- suppressWarnings(t(sapply(arg_values[[1]], summ, showClass=showClass)))
     summary <- as.data.frame(summary)
     summary$Name <- rownames(summary)
-    summary <- summary %>%  select("Name", everything())
+    summary <- summary %>%  dplyr::select("Name", everything())
     } else {
     summary <- sum_func(arg_values[[1]], deparse(arg[[2]]), showClass)
   }
@@ -96,7 +96,7 @@ summ <- function(..., showClass = FALSE) { # summ(df$var1, df$var2, ...) or summ
         sum_i <- suppressWarnings(t(sapply(arg_values[[i]], summ, showClass=showClass)))
         sum_i <- as.data.frame(sum_i)
         sum_i$Name <- rownames(sum_i)
-        sum_i <- sum_i %>% as.data.frame() %>% select("Name", everything())
+        sum_i <- sum_i %>% as.data.frame() %>% dplyr::select("Name", everything())
         summary <- rbind(summary, sum_i)
       }
       else {
