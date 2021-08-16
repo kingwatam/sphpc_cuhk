@@ -29,6 +29,29 @@ df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 df$pase_c_11_1 <- ifelse(df$pase_c_11 == 0 , 0, df$pase_c_11_1)
 df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
 
+# df$yearmonth <- zoo::as.yearmon(df$ehealth_eval_timestamp)
+# df$yearmonth <- match(df$yearmonth, unique(df$yearmonth)[order(unique(df$yearmonth))])
+df$surveydate <- as.Date(df$ehealth_eval_timestamp)
+df$surveydate <- match(df$surveydate, unique(df$surveydate)[order(unique(df$surveydate))])
+
+# total score of diet items ----
+scoring <- function(df){
+  reverse_matrix_diet <- matrix_diet_[c(1, 2)] # high-sugar/high-fat snacks & processed/canned foods
+  df[reverse_matrix_diet] <- (df[reverse_matrix_diet]-4)*-1 # reverse (0:4) to (4:0)
+  
+  diet_ <- c(matrix_diet_, diet_)
+  df <- df %>% 
+    mutate(diet_sum = rowSums(.[diet_], na.rm = FALSE) 
+    )
+  
+  
+  return(subset(df, select = c(diet_sum
+  )))
+}
+
+df <- cbind(df, scoring(df))
+         
+
 # set variable names ----
 var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=better)"),  
                        c("amic", "Memory symptoms, proportion of AMIC >= 3 (lower=better)"),  
@@ -65,7 +88,7 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_dp5", "Amount of meat/poultry/fish/egg per day")), dim = c(2,33)))
 
 # restrict sample to age >= 60 ----
-# df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-07-04'),]
+# df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-07-19'),]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age >= 60),]
 
@@ -317,18 +340,18 @@ to_English <- function(df){
   return(df)
 }
 
-allVars <- c("use_health_service_8", "amic", "amic_sum", 
+allVars <- c("amic", "amic_sum", 
              "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
              "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
              "satisfaction_1", "satisfaction_2", 
              "pase_c", "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_11_1", "pase_c_12_1", "pase_c_12",
              "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
-             "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5")
+             "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5", "diet_sum", "use_health_service_8")
 
 ordinalVars <- c("amic",
-                 "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5", 
+                 "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
                  "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression",
-                 "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_12_1", 
+                 "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_12_1",
                  "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
                  "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5")
 
@@ -633,11 +656,11 @@ gen_table2 <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group =
 }
 
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(df, allVars[], ordinalVars, medianVars) %>% clipr::write_clip()
+gen_table(df, allVars[], NULL, medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
 # baseline & follow-up in same period ----
-temp <- df[, c(1:105)]
+temp <- df[, c(1:107)]
 temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
                (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') | 
                   as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
@@ -649,7 +672,7 @@ temp <- rbind(temp1, temp2)
 rm(temp1, temp2)
 
 # # Obtain a random sub-sample of those with both T0 & T1
-# set.seed(646321)
+# set.seed(463621)
 # selected_id <- unique(sample(temp$member_id[temp$time == 1], size = 500))
 # temp <- temp[temp$time == 0 |
 #                (temp$time == 1 & temp$member_id %in% selected_id), ] 
@@ -686,7 +709,7 @@ get_descstat <- function(df){
                            vars = allVars, factorVars = catVars) %>%
     print(showAllLevels = TRUE) %>% clipr::write_clip()
 }
-# get_descstat(temp)
+get_descstat(temp)
 
 library(MatchIt)
 library(optmatch) # for optimal matching
@@ -706,7 +729,8 @@ temp$housing_type <- to_factor(temp$housing_type)
 #                  # , distance='mahalanobis'
 #                  )
 matched.out <- matchit(time ~ gender + age + 
-                         housing_type +
+                         # housing_type +
+                         surveydate +
                          risk_score,
                  data = temp, method = "optimal"
                  # , caliper = 0.25
@@ -719,43 +743,90 @@ temp_matched <- match.data(matched.out, data = temp)
 temp_matched$member_id_old <- temp_matched$member_id
 temp_matched$member_id <- temp_matched$subclass
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(temp_matched, allVars[], ordinalVars, medianVars, paired =  TRUE) %>% clipr::write_clip()
+gen_table(temp_matched, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
-plot(summary(matched.out)
-     , xlim=c(0,0.25)
-     )
+# plot(summary(matched.out)
+#      , xlim=c(0,0.25)
+#      )
+library(cobalt)
+v <- data.frame(old = c("distance", "gender_M", "age", 
+                        "housing_type_Public Housing", "housing_type_Subsidized Housing", "housing_type_Private Housing", 
+                        "housing_type_Homes for the Aged", "housing_type_Others (e.g. Temporary Housing)",
+                        "surveydate", 
+                        "risk_score"),
+                new = c("Distance", "Sex", "Age", 
+                        "Housing type - public housing", "Housing type - subsidized housing", "Housing type - private housing", 
+                        "Housing type - homes for the aged", "Housing type - Others (e.g. temporary Housing)",
+                        "Survey date", 
+                        "WBS risk score"))
+love.plot(matched.out, thresholds = c(m = .1), colors = c("grey", "black"), stars =  "none", abs = TRUE, 
+          var.names = v,  size = 3, sample.names = c("Unmatched", "Matched")) +  theme(plot.title = element_text(size = 16, hjust = 0.5),
+                                                                                       axis.title.x = element_text(size = 12),
+                                                                                       legend.text = element_text(size=12), 
+                                                                                       axis.text.x = element_text(size=12),
+                                                                                       axis.text.y = element_text(size=12)) 
+
+  
 
 # # check robustness of the matching method for T0 between matched and random subset of those with both T0 & T1
 # temp <- df
-# temp <- temp %>% add_count(member_id) # create variable n 
-# member_ids_both <- unique(temp$member_id[temp$n == 2 & as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-02-01')])
 # temp$n <- NULL
-# member_ids_both <- sample(member_ids_both, length(member_ids_both)*2/3)
-# temp$test <- ifelse(as.Date(temp$ehealth_eval_timestamp) < as.Date('2020-11-01') &
-#                       temp$member_id %in% member_ids_both, 1, 0)
+# temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
+#                (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') |
+#                   as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
+# temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
+# temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) <= as.Date('2020-11-19') & n == 1 &
+#                                                     member_id %!in% unique(temp1$member_id) & time == 0)
+# temp <- rbind(temp1, temp2)
+# rm(temp1, temp2)
 # 
-# temp$int_t0 <- ifelse(as.Date(temp$ehealth_eval_timestamp) < as.Date('2020-11-01') &
+# # temp <- temp %>% add_count(member_id) # create variable n
+# member_ids_both <- unique(temp$member_id[temp$n == 2 & as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-02-01')])
+# set.seed(463621)
+# member_ids_both <- sample(member_ids_both, length(member_ids_both)*3/4)
+# temp$int_t0 <- ifelse(as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') &
 #                         temp$member_id %in% member_ids_both, 1,
-#                       ifelse(as.Date(temp$ehealth_eval_timestamp) < as.Date('2020-11-01') &
+#                       ifelse(as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') &
 #                                temp$member_id %!in% member_ids_both, 0, NA))
 # temp$housing_type <- to_factor(temp$housing_type)
 # select_vars <-  c("int_t0", "gender", "age", "living_status",
 #                   # "marital", "educ", "housing_type",
 #                   "risk_score")
 # temp <- temp[complete.cases(temp[, select_vars]),]
-# matched.out <- matchit(int_t0 ~ gender + age + housing_type + risk_score,
+# matched.out <- matchit(int_t0 ~ gender + age +
+#                          # housing_type +
+#                          surveydate +
+#                          risk_score,
 #                        data = temp, method = "optimal"
 #                        # , caliper = 0.25
 #                        # , distance='mahalanobis'
 # )
-# temp_matched <- match.data(matched.out, data= temp) 
+# temp_matched <- match.data(matched.out, data= temp)
 # temp_matched$member_id <- temp_matched$subclass
 # Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-# gen_table(temp_matched, allVars[], ordinalVars, medianVars, paired =  TRUE, group = "int_t0") %>% clipr::write_clip()
-# Sys.setlocale(locale =  "eng") 
-# plot(summary(matched.out)
-#      , xlim=c(0,0.25)
-# ) 
+# gen_table(temp_matched, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE, group = "int_t0") %>% clipr::write_clip()
+# Sys.setlocale(locale =  "eng")
+# # plot(summary(matched.out)
+# #      , xlim=c(0,0.25)
+# # )
+# library(cobalt)
+# v <- data.frame(old = c("distance", "gender_M", "age", 
+#                         "housing_type_Public Housing", "housing_type_Subsidized Housing", "housing_type_Private Housing", 
+#                         "housing_type_Homes for the Aged", "housing_type_Others (e.g. Temporary Housing)",
+#                         "surveydate", 
+#                         "risk_score"),
+#                 new = c("Distance", "Sex", "Age", 
+#                         "Housing type - public housing", "Housing type - subsidized housing", "Housing type - private housing", 
+#                         "Housing type - homes for the aged", "Housing type - Others (e.g. temporary Housing)",
+#                         "Survey date", 
+#                         "WBS risk score"))
+# love.plot(matched.out, thresholds = c(m = .1), colors = c("grey", "black"), stars =  "none", abs = TRUE,
+#           var.names = v,  size = 3, sample.names = c("Unmatched", "Matched")) +  theme(plot.title = element_text(size = 16, hjust = 0.5),
+#                                               axis.title.x = element_text(size = 12),
+#                                               legend.text = element_text(size=12),
+#                                               axis.text.x = element_text(size=12),
+#                                               axis.text.y = element_text(size=12))
+
 
 # generate a table of results ----
 temp_matched$int <- temp_matched$time
@@ -774,52 +845,80 @@ complete_cases <- function(df, var){
   return(df)
 }
 
-# table <- combine_tables(NULL,
-#                         exponentiate = FALSE,
-#                         show_CI = 0.83,
-#                         lmer(use_health_service_8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "use_health_service_8")),
-#                         lmer(amic~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic")),
-#                         # glmer(amic~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(amic_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic_sum")),
-#                         # clmm(as.factor(amic_sum) ~ covid+int + (1 | subclass), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-#                         lmer(self_efficacy~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy")),
-#                         lmer(self_efficacy_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_1")),
-#                         lmer(self_efficacy_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_2")),
-#                         lmer(self_efficacy_3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_3")),
-#                         lmer(self_efficacy_4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_4")),
-#                         lmer(self_efficacy_5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_5")),
-# 
-#                         lmer(eq5d~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d")),
-#                         lmer(eq5d_mobility~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_mobility")),
-#                         lmer(eq5d_self_care~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_self_care")),
-#                         lmer(eq5d_usual_activity~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_usual_activity")),
-#                         lmer(eq5d_pain_discomfort~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_pain_discomfort")),
-#                         lmer(eq5d_anxiety_depression~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_anxiety_depression")),
-#                         lmer(eq5d_health~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_health")),
-# 
-#                         lmer(satisfaction_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_1")),
-#                         lmer(satisfaction_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_2")),
-# 
-#                         lmer(pase_c~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c")),
-#                         lmer(pase_c_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1")),
-#                         lmer(pase_c_1_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1_2")),
-#                         lmer(pase_c_11~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11")),
-#                         # glmer(pase_c_11~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(pase_c_11_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11_1")),
-#                         lmer(pase_c_12_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12_1")),
-#                         # glmer(pase_c_12_1~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-#                         lmer(pase_c_12~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12")),
-# 
-#                         lmer(matrix_diet_dh3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh3")),
-#                         lmer(matrix_diet_dh4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh4")),
-#                         lmer(matrix_diet_dh7~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh7")),
-#                         lmer(matrix_diet_dh8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh8")),
-#                         lmer(diet_dp1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp1")),
-#                         lmer(diet_dp3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp3")),
-#                         lmer(diet_dp4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp4")),
-#                         lmer(diet_dp5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5"))
-# )
-# table %>% clipr::write_clip()
+table <- combine_tables(NULL,
+                        exponentiate = FALSE,
+                        # show_CI = 0.83,
+                        lmer(use_health_service_8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "use_health_service_8")),
+                        lmer(amic~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic")),
+                        # glmer(amic~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(amic_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic_sum")),
+                        # clmm(as.factor(amic_sum) ~ covid+int + (1 | subclass), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
+                        lmer(self_efficacy~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy")),
+                        lmer(self_efficacy_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_1")),
+                        lmer(self_efficacy_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_2")),
+                        lmer(self_efficacy_3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_3")),
+                        lmer(self_efficacy_4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_4")),
+                        lmer(self_efficacy_5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_5")),
+
+                        lmer(eq5d~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d")),
+                        lmer(eq5d_mobility~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_mobility")),
+                        lmer(eq5d_self_care~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_self_care")),
+                        lmer(eq5d_usual_activity~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_usual_activity")),
+                        lmer(eq5d_pain_discomfort~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_pain_discomfort")),
+                        lmer(eq5d_anxiety_depression~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_anxiety_depression")),
+                        lmer(eq5d_health~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_health")),
+
+                        lmer(satisfaction_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_1")),
+                        lmer(satisfaction_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_2")),
+
+                        lmer(pase_c~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c")),
+                        lmer(pase_c_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1")),
+                        lmer(pase_c_1_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1_2")),
+                        lmer(pase_c_11~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11")),
+                        # glmer(pase_c_11~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(pase_c_11_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11_1")),
+                        lmer(pase_c_12_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12_1")),
+                        # glmer(pase_c_12_1~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(pase_c_12~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12")),
+
+                        lmer(matrix_diet_dh3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh3")),
+                        lmer(matrix_diet_dh4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh4")),
+                        lmer(matrix_diet_dh7~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh7")),
+                        lmer(matrix_diet_dh8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh8")),
+                        lmer(diet_dp1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp1")),
+                        lmer(diet_dp3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp3")),
+                        lmer(diet_dp4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp4")),
+                        lmer(diet_dp5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5")),
+                        lmer(diet_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5"))
+)
+table %>% clipr::write_clip()
+
+# summary statistics of matched ----
+temp <- df_matched %>%
+  add_count(subclass, covid) %>%
+  filter(n >= 2) 
+
+allVars <- c("amic", "amic_sum", 
+             "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
+             "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
+             "satisfaction_1", "satisfaction_2", 
+             "pase_c", "diet_sum", "use_health_service_8")
+
+# control & intervention (post)
+tableone::CreateTableOne(data =  temp,
+                         strata = c("int"),
+                         vars = allVars, test = FALSE) %>%
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+# pre & post
+temp <- df_matched %>%
+  add_count(member_id) %>%
+  filter(n >= 2) 
+
+tableone::CreateTableOne(data =  temp,
+                         strata = c("int"),
+                         vars = allVars, test = FALSE) %>%
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
 
 # plot covid & intervention effects ----
 gen_coef <- function(model, coef_name, CI = 0.83){
@@ -1018,7 +1117,6 @@ for (var in allVars){
 }
 dev.off()
 
-
 # testing different changes to the plot ----
 results_test <- data.frame()
 # var <- "eq5d_pain_discomfort"
@@ -1183,11 +1281,11 @@ plot_ehealth <-
     labels = c(lab_bl_ctrl, "Follow-up"), values = c("#4456bb", "#ffd500")
   ) +
   labs(
-    # title = "Number of assessments over time",
+    title = "Number of assessments over time",
        x = "", 
-       y = ""
+       y = "Number of assessments"
        ) +
-  geom_histogram(bins = 500, alpha=0.55,position="identity") +
+  geom_histogram(bins = 40, alpha=0.55,position="identity") +
   # geom_jitter(height = 0.25) +
   scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
   theme_minimal() + theme(text = element_text(size=rel(5))) +
@@ -1195,7 +1293,8 @@ plot_ehealth <-
   theme(plot.title = element_text(size = 26, hjust = 0.5),
         legend.text = element_text(size=24), 
         axis.text.x = element_text(size=24, angle=50, vjust = 1, hjust = 1),
-        axis.text.y = element_text(size=20)) 
+        axis.text.y = element_text(size=20),
+        panel.grid.major.x = element_blank()) 
 
 plot_covid <-
   ggplot(covid, aes(x=as.Date(date), y = new_confirmed)) +
