@@ -542,13 +542,21 @@ gen_reg <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, ex
     
     if (show_CI){
     alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
-    # lowerCI <- iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
-    lowerCI <- confint(fit, var, level=(1-alpha))[1] # this is slower than qnorm
-    # upperCI <- iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
-    upperCI <- confint(fit, var, level=(1-alpha))[2]
+    lowerCI <- iferror(confint(fit, var, level=(1-alpha))[1],  # this is slower than qnorm
+                       iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+                       )
+                       
+    upperCI <- iferror(confint(fit, var, level=(1-alpha))[2], 
+                       iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+                       )
     }
     
-    p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
+    if (class(fit)[1] %in% "gee"){
+      robust_z <- summary(fit)$coef[var, ncol(summary(fit)$coef)]
+      p_value <- iferror(2 * pnorm(abs(robust_z), lower.tail = FALSE), NA)
+    } else {
+      p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
+    }
     
     # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
     if (show_p){
@@ -556,7 +564,6 @@ gen_reg <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, ex
     } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
       table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
       if (show_CI){
-
         table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
       }
     } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
