@@ -12,7 +12,10 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-07-20_1033.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-08-16_1105.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+
+# temporary fix
+# df$member_id[df$record_id == 3747] <- "YWC01M332"
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -24,7 +27,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210720_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210816_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -111,7 +114,7 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs2 <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-06-05.xlsx", sheetName  = "Raw data"
+wbs2 <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-08-07.xlsx", sheetName  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(as.numeric(wbs2$Survey_date), origin = "1899-12-30")
 wbs2$All_forms_completed_date <- as.Date(as.numeric(wbs2$All_forms_completed_date), origin = "1899-12-30")
@@ -191,6 +194,9 @@ for (var in names(wbs2)){
 
 wbs2 <- wbs2[order(wbs2$wbs_survey_date),] # order by WBS survey date
 wbs2 <- distinct(wbs2, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
+
+wbs <- wbs[order(wbs$wbs_survey_date),] # order by WBS survey date
+wbs <- distinct(wbs, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
 
 df$member_id <- toupper(df$member_id)
 df <- merge(df, wbs2[, vars], # extract item matched by member ID
