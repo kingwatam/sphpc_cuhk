@@ -346,7 +346,7 @@ trycatch_ <- function(func, x){
 
 convert2NA <- function(df, values){
   for (c in (1:ncol(df))){
-    df[df[,c] %in% values, c] <- NA
+    df[df[[c]] %in% values, c] <- NA
   }
   return(df)
   ## Quite slow when not vectorise
@@ -367,7 +367,7 @@ convert2value <- function(df, values, value){
       was_factor <- TRUE
       df[,c] <- as.character(df[,c])
     }
-    df[df[,c] %in% values, c] <- value
+    df[df[[c]] %in% values, c] <- value
     if (was_factor){ 
       df[,c] <- as.factor(df[,c])
     }
