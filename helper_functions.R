@@ -294,10 +294,8 @@ import_func <- function(R_file, encoding = "unknown"){
 }
 
 write_excel <- function(filename = "sheet.xlsx", ..., remove_char =  NULL){ 
-  require(xlsx)
-  require(rJava)
-  require(XLConnect)
-  wb <- xlsx::createWorkbook("xlsx")
+  require(writexl) # this package has no dependence on Java
+  wb <- list()
   if (is.null(remove_char)){
     n_args <- nargs()-1 # subtract first arg
   } else {
@@ -317,12 +315,9 @@ write_excel <- function(filename = "sheet.xlsx", ..., remove_char =  NULL){
         sheetname <- gsub("[^[:alnum:][:blank:]+|~`!@#$%^&()_-{};,<.>]", "", sheetname) # keep a few punctuation marks
       }
     }
-    sheet <- xlsx::createSheet(wb, sheetName = sheetname)  # certain punctuation marks are removed due to Excel worksheet names not allowing them
-    xlsx::addDataFrame(as.data.frame(arg_values[[i]]), sheet,
-                       startRow=1, startColumn=1,
-                       row.names = FALSE, showNA = FALSE)
+    wb[[sheetname]] <- as.data.frame(arg_values[[i]])
   }
-  xlsx::saveWorkbook(wb, filename, password=NULL)
+  return(write_xlsx(wb, filename))
 }
 
 iferror <- function(expr, error_expr){
