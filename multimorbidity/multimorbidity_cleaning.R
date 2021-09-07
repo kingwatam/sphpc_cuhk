@@ -24,7 +24,14 @@ names(df)[names(df) == "hcuhsp1bvf"] <- "hcuhsp1bf1"
 names(df)[names(df) == "medno"] <- "mednof1"
 names(df)[names(df) == "abusebodyf"] <- "abusebodyf1"
 names(df)[names(df) == "abusepplof"] <- "abusepplof1"
+names(df)[names(df) == "oralhealthf0"] <- "oralf0"
 df <- convert2NA(df, c("#N/A", "."))
+
+# extract sat2f1 & sat3f1 data from old dataset
+setwd(sprintf("~%s/multimorbidity", setpath))
+t0t1 <- foreign_to_labelled(haven::read_sav("jc_acitivity_FU1 2019Mar26 v2.sav", encoding = "MS936")) 
+df$sat2f1 <- ifelse(df$sat2f1 == 0, t0t1$sat2f1[t0t1$sopd %in% df$sopd], df$sat2f1)
+df$sat3f1 <- ifelse(df$sat3f1 == 0, t0t1$sat3f1[t0t1$sopd %in% df$sopd], df$sat3f1)
 
 # Replace Chinese characters
 setwd(sprintf("~%s/multimorbidity/archive", setpath))
@@ -66,6 +73,15 @@ df$datef1 <- as.Date(df$datef1, origin = "1899-12-30")
 df$phq2tf1 <- df$phq1f1 + df$phq2f1 # PHQ-2
 df$gad2tf1 <- df$gad1f1  + df$gad2f1  # GAD-2
 
+names(df)[names(df) %in% (df %>% select(starts_with("bp12")) %>% names())] <- 
+  sub("bp12", "bpi2", names(df)[names(df) %in% (df %>% select(starts_with("bp12")) %>% names())]) # replace "bp1" with "bpi" for pain 
+
+# only allow those who have done telephone interview to have moca5m 
+df$moca5m1f1 <- ifelse(df$moca5mtf1==1, NA, df$moca5m1f1) 
+df$moca5m2f1 <- ifelse(df$moca5mtf1==1, NA, df$moca5m2f1)
+df$moca5m3f1 <- ifelse(df$moca5mtf1==1, NA, df$moca5m3f1)
+df$moca5m4f1 <- ifelse(df$moca5mtf1==1, NA, df$moca5m4f1)
+
 df$isitf0 <- car::recode(df$isif0, "
 0:7 = 1;
 8:14 = 2;
@@ -82,6 +98,8 @@ df$isitf1 <- car::recode(df$isif1, "
 
 # male = 1, female = 0
 df$genderf0 <- ifelse(df$genderf0 == 1, "M", "F")
+
+df$srsf1 <- ifelse(df$srsf1 == 0, 1, df$srsf1) # likely miscoding, range = 1:3
 
 scoring_t0t1 <- function(df){
   df %>% select(starts_with("ls") & ends_with("f0")) %>% colnames(.) -> q_ls_f0
@@ -469,13 +487,15 @@ for (var in vars){
   }
 }
 
+df$genderf1 <- df$genderf0
+df$genderf2 <- df$genderf0
+
 # all_vars <- sapply(vars, function(x) sprintf(paste0(x, "f%s"), 0:3)) %>% as.vector # all combinations from f0 to f3
 all_vars <- names(df)[names(df) %in% (df %>% select(ends_with(sprintf("f%s", 0:3))) %>% colnames)]
 all_vars <- all_vars[order(all_vars)]
 vars_list <- rep(list(c()), length(vars)) # create 449 empty elements in list
 
 # group variables into groups of 4 for merging
-
 for (i in (1:length(vars))){ # every 4th element
   vars_list[[i]] <- c(paste0(vars[i], "f0"), 
                       paste0(vars[i], "f1"),
@@ -490,10 +510,14 @@ df <- reshape(df,
               varying = vars_list,
               sep = "", 
               v.name = vars,
-              # timevar = "time",
-              # times = 0:3,
+              timevar = "time",
+              times = 0:3,
               direction = "long")
 
-# ----
+saveRDS(df, "t0t1t2t3_data.rds")
+saveRDS(dfwide, "t0t1t2t3_data_wide.rds")
+# write_excel("t0t1t2t3_data.xlsx", df)
+# write_excel("t0t1t2t3_data_wide.xlsx", dfwide)
+# haven::write_sav(df, "t0t1t2t3_data.sav")
 
 # t3 %>% select(starts_with(c("phq", "gad", "ls", "isi", "eq5d", "sar", "efs", "meaning", "sleep"))) %>% summ() 
