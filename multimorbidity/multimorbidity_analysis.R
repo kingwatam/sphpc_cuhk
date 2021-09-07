@@ -13,334 +13,396 @@ library(ggpubr) # ggerrorplot
 library(labelled) # to_factor
 
 setwd(sprintf("~%s/multimorbidity", setpath))
-# df <- readRDS("JC_covid_data_long.rds")
-# write.csv(df, file = "JC_covid_data_long.csv")
-# dfwide <- readRDS("JC_covid_data_wide.rds")
-df <- readRDS("t0t1t2_data.rds")
-dfwide <- readRDS("t0t1t2_data_wide.rds")
+df <- readRDS("t0t1t2t3_data.rds")
+dfwide <- readRDS("t0t1t2t3_data_wide.rds")
 
-# df$efs4_hist2 <- car::recode(df$efs4_hist, "
-# c('000', '111', '222') = 'No change';
-# c('001', '002', '011', '012', '022', '112', '122') = 'Better';
-# c('010', '020', '021', '120', '121') = 'Better then worse';
-# c('100', '110', '200', '210', '211', '220', '221') = 'Worse';
-# c('101', '102', '201', '202', '212') = 'Worse then better'
-# ")
-# df$efs4_hist2 <- relevel(as.factor(df$efs4_hist2), ref = 'No change')
-df$efs4 <- relevel(to_factor(df$efs4), ref = 'Never')
-
-# df$time <- as.numeric(df$time)
-
-df$covid <- if_else(df$time == 2, 1, 0)
-df$age_group <- recode_age(df$age, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
-dfwide$age_group.2 <- recode_age(dfwide$age.2, age_labels = NULL, second_group = 60, interval = 10, last_group = 80)
-
-# descriptive statistics ----
-allVars <- c("age", "age_group", "gender", "CD", "meaning", "support", "eq5d", "eq5dvas", "fs", "efs")
-catVars <- c("age_group", "gender")
-tableone::CreateTableOne(data =  df, 
-                         strata = "time",
-                         vars = allVars, factorVars = catVars) %>% 
-  print(showAllLevels = TRUE) %>% clipr::write_clip()
-
-# preliminary analysis ----
-df$time <- relevel(as.factor(df$time), ref = "1")
-lmer(support~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5d~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5dvas~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(isi~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(gad~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(loneliness~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_emo~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_soc~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-
-df$support_ <- car::recode(df$support, "1 = 0; 2 = 1")
-glmer_fit <- glmer(support_~ 1+age_group+female+CD+time*meaning+ (1| case_id), family = binomial, data = df) 
-summary(glmer_fit) 
-
-# exploratory analysis (legacy) ----
-reg_table <- function(data){
-  table <- data.frame(matrix(ncol = 15,  nrow = 0))
-  row_count <- 1
-  col_count <- 2
+# creat categorical variables ----
+categorize <- function(df){
+  df$bps <- (df$bp1s + df$bp2s)/2 # average systolic BP
+  df$bps <- ifelse(is.na(df$bps), df$bp1s, df$bps)
+  df$bps <- ifelse(is.na(df$bps), df$bp2s, df$bps)
   
-  for (dep_var in c("meaning", "support", "eq5d", "eq5dvas", 
-                    # "moca", "mci",
-                    "loneliness", "loneliness_emo", "loneliness_soc", 
-                    "gad", "gad_group", "isi", "isi_group", "phq", "phq_group")){
-    
-    dep_var <- paste0(dep_var, ".2")
-    
-    for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
-                  "loneliness", "loneliness_emo", "loneliness_soc", 
-                  "gad", "gad_group", "isi", "isi_group", "phq", "phq_group")){
-      var_original <- var
-      
-      # create difference variables
-      eval_("data$", var, ".dif10", " <- ", "data$", var, ".1 -", "data$", var, ".0")
-      eval_("data$", var, ".dif21", " <- ", "data$", var, ".2 -", "data$", var, ".1")
-      eval_("data$", var, ".dif20", " <- ", "data$", var, ".2 -", "data$", var, ".0")
+  df$bpd <- (df$bp1d + df$bp2d)/2 # average systolic BP
+  df$bpd <- ifelse(is.na(df$bpd), df$bp1d, df$bpd)
+  df$bpd <- ifelse(is.na(df$bpd), df$bp2d, df$bpd)
+  
+  df$hypertension <- ifelse(df$bps >= 140 | df$bp2d >= 90, 1, 0)
+  
+  df %>% select(starts_with(sprintf("bpi%s", 3:6))) %>% names() -> q_bpi_s # BPI pain severity
+  df %>% select(starts_with(sprintf("bpi%s", 10:16))) %>% names() -> q_bpi_i # BPI pain interference
+  df %>% select(starts_with(sprintf("iadl%s", 1:5))) %>% names() -> q_iadl # BPI pain interference
+  
+  # reverse code IADL
+  df[q_iadl] <- sapply(df[q_iadl], function(x) ifelse(x == 7, NA, x))
+  df[q_iadl] <- sapply(df[q_iadl], function(x) (x-4)*-1) # from 1:3 to 3:1
+  
+  df <- df %>%
+    mutate(
+      bpi_s = rowSums(.[q_bpi_s], na.rm = FALSE)/4,
+      bpi_i = rowSums(.[q_bpi_i], na.rm = FALSE)/7,
+      iadl = rowSums(.[q_iadl], na.rm = FALSE)/5,
+    )
+  
+  df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
+  df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
+  df$hgs <- pmax(df$hgs_l, df$hgs_r) # average hand-grip strength
+  # df$gender <- to_factor(df$gender)
+  
+  df$hgs_ <- ifelse(is.na(df$hgs) | is.na(df$gender), NA, 
+                    ifelse(df$hgs >= 26 & df$gender == "M" , 1, 
+                           ifelse(df$hgs >= 18 & df$gender == "F" , 1, 0)))
+  
+  # df$sar_ <- ifelse(df$sar >= 4, "SARc-F positive (≥4)", "SARc-F negative (<4)")
+  df$sar_ <- ifelse(df$sar >= 4, 1, 0)
+  
+  # df$phq_ <- car::recode(df$phq, "
+  # 0:4 = 'Normal (<5)';
+  # 5:9 = 'Mild (5-9)';
+  # 10:14 = 'Moderate (10-14)';
+  # 15:19 = 'Moderately severe (15-19)';
+  # 20:hi = 'Severe (20+)'
+  # ")
+  df$phq_ <- car::recode(df$phq, "
+  0:4 = 1;
+  5:9 = 2;
+  10:14 = 3;
+  15:19 = 4;
+  20:hi = 5
+  ")
+  
+  # df$phq2t_ <- ifelse(df$phq2t >= 3, "≥3", "<3")
+  df$phq2t_ <- ifelse(df$phq2t >= 3, 1, 0)
+  
+  # df$gad_ <- car::recode(df$gad, "
+  # 0:4 = 'Very mild (<5)';
+  # 5:9 = 'Mild (5-9)';
+  # 10:14 = 'Moderate (10-14)';
+  # 15:hi = 'Severe (15+)'
+  # ")
+  df$gad_ <- car::recode(df$gad, "
+  0:4 = 1;
+  5:9 = 2;
+  10:14 = 3;
+  15:hi = 4
+  ")
+  
+  # df$gad2t_ <- ifelse(df$gad2t >= 3, "≥3", "<3")
+  df$gad2t_ <- ifelse(df$gad2t >= 3, 1, 0)
+  
+  # df$moca_ <- ifelse(df$moca >= 22, "Normal", "MCI (<22)")
+  df$mci <- ifelse(df$moca >= 22, 0, 1)
+  
+  pase_freq <- function(a, b){
+    if (length(a)!=length(b)){
+      stop("Lengths of a and b must be the same!")
+    }
+    var <- c()
+    for (i in 1:length(a)){
+      if (a[i] %in% 0){
+        var <- c(var, 0)
+      } else if (a[i] %in% 1){
+        var <- c(var, c(0.11,0.32,0.64,1.07)[b[i]])
+      } else if (a[i] %in% 2){
+        var <- c(var, c(0.25,0.75,1.50,2.50)[b[i]])
+      } else if (a[i] %in% 3){
+        var <- c(var,c(0.43,1.29,2.57,4.29)[b[i]])
+      } else if (a[i] %in% NA){
+        var <- c(var, NA)
+      } else {
+        stop("Range exceeds 0-3, check first param!")
+      }
+    }
+    return(var)
+  }
+  
+  pase10 <- ifelse(df$pase10 == 0 | df$pase10b == 0, 0, df$pase10a/7)
+  df$pase <- (20* pase_freq(df$pase2, df$pase2b)  + 21 * pase_freq(df$pase3, df$pase3b)  
+              + 23* (pase_freq(df$pase4, df$pase4b) + pase_freq(df$pase5, df$pase5b)) + 30*pase_freq(df$pase6, df$pase6b)
+              + 25*(df$pase7 + df$pase8) + 30*df$pase9a + 36*df$pase9b + 20*df$pase9c + 35*df$pase9d + 21*pase10)
+  
+  #                                           
+  # df$efs1_ <- ifelse((df$efs1 %in% (1:2) | df$hcuhsp1a %in% 1 | df$hcuhsp1b %in% 1) & !(df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1), 1,
+  #                    ifelse(df$efs1 > 2 | df$hcuhsp1a %in% 2 | df$hcuhsp1b %in% 2 | (df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1), 2,
+  #                           ifelse(df$efs1 %in% 0 | df$hcuhsp1a %in% 0 | df$hcuhsp1b %in% 0, 0, NA)))
+  
+  return(subset(df, select = c(hypertension, bpi_s, bpi_i, hgs, hgs_, sar_, phq_, phq2t_, gad_, gad2t_, mci, iadl, pase)))
+}
 
-      for (suffix in c(".dif10", ".dif21", ".dif20")){
-        var <- paste0(var_original, suffix)
+df <- cbind(df, categorize(df))
+
+
+df$health <- (df$efs2-2)*-1 # reverse code self-rated health
+
+df$hgs_m <- ifelse(df$gender=="M", df$hgs_, NA)
+df$hgs_f <- ifelse(df$gender=="F", df$hgs_, NA)
+
+df$ls_ <- ifelse(df$ls >= 3, 1, 0)
+
+df$hcu2 <- ifelse(is.na(df$hcu2), pmin(df$hcu2a, 1), df$hcu2) # SOPC
+df$hcu3 <- ifelse(is.na(df$hcu3), pmin(df$hcu3a, 1), df$hcu3) # GOPC
+
+df$hcu1 <- ifelse(df$hcu4 >= 14, df$hcu4, df$hcu1)
+df$hcu4 <- ifelse(df$hcu4 >= 14 & df$time == 0, NA,
+                  ifelse(df$hcu4 >= 1 & df$time == 1, 1, df$hcu4))
+
+# EFS (Edmonton Frail Scale)
+df$hcuhsp1 <- ifelse(df$hcuhsp1a %in% 2 | df$hcuhsp1b %in% 2, 2,
+                     ifelse(df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1, 2,
+                            ifelse(df$hcuhsp1a %in% 1 | df$hcuhsp1b %in% 1, 1,
+                                   ifelse(df$hcuhsp1a %in% 0 | df$hcuhsp1b %in% 0, 0, NA)))) 
+df$efs1_ <- ifelse(is.na(df$efs1), df$hcuhsp1, pmin(df$efs1, 2)) 
+
+q_efs <- c("efs1_", sprintf("efs%s", c(2:13)))
+
+df <- df %>%
+  mutate(
+    efs = rowSums(.[q_efs], na.rm = FALSE)
+  )
+
+df$efs14 <- car::recode(df$efs, "
+0:5 = 1;
+6:7 = 2;
+8:9 = 3;
+10:11 = 4;
+12:hi = 5
+")
+
+df$moca_ <- car::recode(df$moca, "
+lo:18 = 1;
+19:25 = 2;
+26:hi = 3
+")
+
+# generate results ----
+gen_table <- function(df, vars, ordinalVars, medianVars, both_tests = FALSE, paired = TRUE, member_id = "member_id", group = "time", 
+                      pre_name = "Baseline" , post_name = "Follow-up"){ 
+  table <- data.frame(matrix(ncol = 10,  nrow = 0))
+  
+  row_count <- 1
+  col_label <- 5
+  col_bl <- 6
+  col_bl2 <- 7 # matched baseline 
+  col_f1 <- 8 # matched follow-up 
+  col_dif <- 9 # difference
+  col_pval <- 10 # p-value
+  col_bl_n <- 2 # n of all baseline
+  col_bl2_n <- 3 # n of matched baseline
+  col_f1_n <- 4 # n of matched follow-up
+  
+  pre <- unique(df$time)[1]
+  post <- unique(df$time)[2]
+  
+  df <- df[df$time %in% c(pre,post) & df$date %!in% NA,] # restrict to only T0 & T1 data
+  df2 <- df %>% add_count(sopd) %>% filter(n==2) # keep only those with both T0 & T1
+  
+  dfwide <- reshape(data=df, idvar= c(member_id),
+                    timevar = group,
+                    direction="wide")
+  
+  dfwide2 <- reshape(data=df2, idvar= c(member_id),
+                     timevar = group,
+                     direction="wide")
+  
+  df_ <- df # duplicate df
+  dfwide2_ <- dfwide2 # duplicate df
+  df2_ <- df2 # duplicate df
+  
+  colnames(table)[1] <- ""
+  colnames(table)[col_label] <- ""
+  colnames(table)[col_bl] <- paste0(pre_name," (all)")
+  colnames(table)[col_bl2] <- paste0(pre_name," (paired)")
+  colnames(table)[col_f1] <- paste0(post_name," (paired)")
+  colnames(table)[col_dif] <- "Difference"
+  colnames(table)[col_pval] <- "p-value"
+  colnames(table)[col_bl_n] <-  paste0("N ", pre_name," (all)")
+  colnames(table)[col_bl2_n] <- paste0("N ", pre_name," (paired)")
+  colnames(table)[col_f1_n] <- paste0("N ", post_name," (paired)")
+  
+  
+  table[row_count, 1] <- "N"
+  table[row_count, col_label] <- ""
+  table[row_count, col_bl] <-  nrow(df[df[[group]] == pre,])
+  table[row_count, col_bl2] <-  nrow(dfwide2)
+  table[row_count, col_f1] <-  nrow(dfwide2)
+  
+  row_count <- row_count + 1
+  
+  get_mean_sd <- function(x){
+    mean <- mean(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
+    sd <- sd(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
+    return(paste0(mean, " (", sd, ")"))
+  }
+  
+  get_median_iqr <- function(x){
+    median <- median(x, na.rm = TRUE) %>% round_format(decimal_places = 0)
+    q1 <- quantile(x, probs =  0.25) %>% round_format(decimal_places = 0)
+    q3 <- quantile(x, probs =  0.75) %>% round_format(decimal_places = 0)
+    
+    return(paste0(median, " (", q1, "-", q3, ")"))
+  }
+  
+  for (var in vars){
+    print(var)
+    df <- df_ # reset df
+    if (class(df[[var]]) == "character") next()
+    if (all(df[[var]][which(df[[group]] == pre)] %in% NA) | all(df[[var]][which(df[[group]] == post)] %in% NA)) next()
+    
+    dfwide2 <- dfwide2_[!is.na(dfwide2_[[paste0(var, ".0")]]) & !is.na(dfwide2_[[paste0(var, ".1")]]), ] # filter from duplicated df 
+    df2 <- df2_[(df2_[[group]] == pre & !is.na(df2_[[var]])) |
+                  (df2_[[group]] == post & !is.na(df2_[[var]])),] # filter from duplicated df 
+    df <- df_[!is.na(df_[[var]]),] # filter from duplicated df 
+    
+    table[row_count, col_bl_n] <-  nrow(df[df[[group]] == pre & !is.na(df[[var]]),])
+    matched_n <- min(nrow(dfwide2[!is.na(dfwide2[[paste0(var, ".0")]]),]), nrow(dfwide2[!is.na(dfwide2[[paste0(var, ".1")]]),]))
+    table[row_count, col_bl2_n] <-  matched_n
+    table[row_count, col_f1_n] <-  matched_n
+    
+    if (var %in% ordinalVars & both_tests) {
+      table[row_count, 1] <- var
+      
+      table[row_count, col_label] <- "mean (sd)"
+      table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == pre)])
+      table[row_count, col_bl2] <- get_mean_sd(dfwide2[[paste0(var, ".0")]])
+      table[row_count, col_f1] <-  get_mean_sd(dfwide2[[paste0(var, ".1")]])
+      
+      t_test <-  
+        t.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = 2)
+      if (t_test$p.value < 0.001){
+        table[row_count, col_pval] <- "<0.001"
+      } else {
+        table[row_count, col_pval] <- t_test$p.value %>% round(digits = 3)
+      }
+      
+      row_count <- row_count + 1
+    }
+    
+    if (var %in% ordinalVars){
+      table[row_count, 1] <- var
+      
+      wilcox_test <-  
+        wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+      if (wilcox_test$p.value < 0.001){
+        table[row_count, col_pval] <- "<0.001"
+      } else {
+        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = 3)
+      }
+      
+      for (val in unique(df[[var]])[order(unique(df[[var]]))]){
+        table[row_count, col_label] <- val
         
-        # var <- paste0(var_original, ".2") # instead of difference
-        
-        if (!(var %in% unlist(table[1]))){
-          table[row_count, 1] <- var
-        } else {
-          row_count <- match(var, unlist(table[1]))
+        if (val %in% NA){
+          table[row_count, col_label] <- "N/A"
         }
         
-        print(paste(dep_var, var))
+        table[row_count, col_bl] <- 
+          table(df[[var]][which(df[[group]] == pre)],useNA = "ifany") %>% 
+          prop.table() %>% as.data.frame() %>% 
+          .[which(.$Var1 %in% val),"Freq"] 
         
-        colnames(table)[col_count] <- dep_var
+        if (val %in% unique(df2[[var]][which(df2[[group]] == pre)])){
+          table[row_count, col_bl2] <- iferror(
+            table(df2[[var]][which(df2[[group]] == pre)],useNA = "ifany") %>%
+              prop.table() %>% as.data.frame() %>%
+              .[which(.$Var1 %in% val),"Freq"], NA)
+        } else {
+          table[row_count, col_bl2]  <- 0
+        }
         
-        iferror(fit <- eval_(
-          "lm(", dep_var, "~", var, ", data = data)"
-        ), next)
+        if (val %in% unique(df2[[var]][which(df2[[group]] == post)])){
+          table[row_count, col_f1] <-
+            table(df2[[var]][which(df2[[group]] == post)],useNA = "ifany") %>%
+            prop.table() %>% as.data.frame() %>%
+            .[which(.$Var1 %in% val),"Freq"]
+        } else {
+          table[row_count, col_f1]  <- 0 
+        }
         
-        n <- iferror(nobs(fit), NA)
-        beta <- iferror(summary(fit)$coef[var, 1], NA)
-        se <-  iferror(summary(fit)$coef[var, 2], NA)
-        lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
-        upperCI <- iferror(beta + qnorm(0.975) * se, NA)
-        p_value <- iferror(summary(fit)$coef[var, 4], NA)
-        
-        # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
-        table[row_count, col_count] <-  starred_p(p_value, 3, beta)
+        table[row_count, col_dif] <- as.numeric(table[row_count, col_f1]) - as.numeric(table[row_count, col_bl2])
+        table[row_count, col_bl] <- table[row_count, col_bl] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+        table[row_count, col_bl2] <- table[row_count, col_bl2] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+        table[row_count, col_f1] <- table[row_count, col_f1] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+        table[row_count, col_dif] <- table[row_count, col_dif] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
         
         row_count <- row_count + 1
       }
-    }
-    col_count <- col_count + 1
-  }
-  return(table)
-}
-
-reg_table2 <- function(data){ # change as dependent variable
-  table <- data.frame(matrix(ncol = 16,  nrow = 0))
-  row_count <- 1
-  col_count <- 2
-  
-  for (dep_var in c("meaning", "support", "eq5d", "eq5dvas",
-                    "loneliness", "loneliness_emo", "loneliness_soc", 
-                    "gad", "gad_group", "isi", "isi_group", "phq", "phq_group",
-                    "moca", "mci")){
-    
-    # create difference variables
-    eval_("data$", dep_var, ".dif10", " <- ", "data$", dep_var, ".1 -", "data$", dep_var, ".0")
-    eval_("data$", dep_var, ".dif21", " <- ", "data$", dep_var, ".2 -", "data$", dep_var, ".1")
-    eval_("data$", dep_var, ".dif20", " <- ", "data$", dep_var, ".2 -", "data$", dep_var, ".0")
-    
-    dep_var <- paste0(dep_var, ".dif10")
-    
-    for (var in c("meaning", "support", "eq5d", "eq5dvas", 
-                  "loneliness", "loneliness_emo", "loneliness_soc", 
-                  "gad", "gad_group", "isi",  "isi_group", "phq", "phq_group",
-                  "moca", "mci")){
-      var_original <- var
+    } else {
+      table[row_count, 1] <- var
       
-      eval_("data$", var, ".dif10", " <- ", "data$", var, ".1 -", "data$", var, ".0")
-      eval_("data$", var, ".dif21", " <- ", "data$", var, ".2 -", "data$", var, ".1")
-      eval_("data$", var, ".dif20", " <- ", "data$", var, ".2 -", "data$", var, ".0")
+      table[row_count, col_label] <- "mean (sd)"
+      table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == pre)])
+      table[row_count, col_bl2] <- get_mean_sd(dfwide2[[paste0(var, ".0")]])
+      table[row_count, col_f1] <-  get_mean_sd(dfwide2[[paste0(var, ".1")]])
       
-      for (suffix in c(".dif10", ".dif21", ".dif20")){
-        var <- paste0(var_original, suffix)
-
-        if (var == dep_var){next}
-        
-        # var <- paste0(var_original, ".1")
-        
-        if (!(var %in% unlist(table[1]))){
-          table[row_count, 1] <- var
-        } else {
-          row_count <- match(var, unlist(table[1]))
-        }
-        
-        print(paste(dep_var, var))
-        
-        colnames(table)[col_count] <- dep_var
-        
-        iferror(fit <- eval_(
-          "lm(", dep_var, "~", var, ", data = data)"
-        ), next)
-        
-        n <- iferror(nobs(fit), NA)
-        beta <- iferror(summary(fit)$coef[var, 1], NA)
-        se <-  iferror(summary(fit)$coef[var, 2], NA)
-        lowerCI <-  iferror(beta + qnorm(0.025) * se, NA)
-        upperCI <- iferror(beta + qnorm(0.975) * se, NA)
-        p_value <- iferror(summary(fit)$coef[var, 4], NA)
-        
-        # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, 3, beta))
-        table[row_count, col_count] <-  iferror(starred_p(p_value, 3, beta), NA)
-        
-        rm(fit, beta, p_value)
-        row_count <- nrow(table) + 1
+      t_test <-  
+        t.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = 2)
+      if (t_test$p.value < 0.001){
+        table[row_count, col_pval] <- "<0.001"
+      } else {
+        table[row_count, col_pval] <- t_test$p.value %>% round(digits = 3)
       }
+      
+      row_count <- row_count + 1
     }
-    col_count <- col_count + 1
+    
+    if (var %in% medianVars){
+      table[row_count, col_label] <- "median (Q1-Q3)"
+      table[row_count, col_bl] <-  get_median_iqr(df[[var]])
+      table[row_count, col_bl2] <- get_median_iqr(dfwide2[[paste0(var, ".0")]])
+      table[row_count, col_f1] <-  get_median_iqr(dfwide2[[paste0(var, ".1")]])
+      
+      table[row_count, col_dif] <- (median(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - median(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) 
+      
+      wilcox_test <-  
+        wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+      if (wilcox_test$p.value < 0.001){
+        table[row_count, col_pval] <- "<0.001"
+      } else {
+        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = 3)
+      }
+      
+      row_count <- row_count + 1
+    }
   }
   return(table)
 }
 
-# table <- reg_table2(dfwide)
+vars <- c("bmi", "bmi2", "height", "waist", "hypertension", "hgs", "hgs_",  "sar", "sar_", "bpi_s", "bpi_i", "iadl", "pain", "srs",
+          "phq", "phq_", "phq2t", "phq2t_", "gad", "gad_", "gad2t", "gad2t_", 
+          "ls", "ls_e", "ls_s", 
+          "sleep", "isi", "isit", "meaning", "eq5d", "eq5d6", "moca", "mci", "smu1", "health",
+          "efs4", "efs5", "efs6", 
+          "hgs_m", "hgs_f", "pain", "ls_", "oral", "efs1_", "hcu2", "hcu3", "hcu4", "hcu1", "efs1", "efs", "efs14", "moca_"
+          )
 
-dfwide$mci_hist <- ifelse(dfwide$mci.0 %in% NA | dfwide$mci.1 %in% NA, NA,
-                       paste(dfwide$mci.0, dfwide$mci.1, sep = ""))
+vars_except <- c("sopd", "time", "date", "time1", "time2", sprintf("note%s", 1:5))
 
-# generate difference variables
-for (var in c("meaning", "support", "eq5d", "eq5dvas", "moca", "mci",
-              "loneliness", "loneliness_emo", "loneliness_soc", 
-              "gad", "gad_group", "isi", "phq", "phq_group")){
-  
-  eval_("dfwide$", var, ".dif10", " <- ", "dfwide$", var, ".1 -", "dfwide$", var, ".0")
-  eval_("dfwide$", var, ".dif21", " <- ", "dfwide$", var, ".2 -", "dfwide$", var, ".1")
-  eval_("dfwide$", var, ".dif20", " <- ", "dfwide$", var, ".2 -", "dfwide$", var, ".0")
-}
+vars_ordinal <- c("bmi2", "hypertension", "hgs_", "srs", "sar_", "phq_", "phq2t_", "gad_", "gad2t_", "isit", "sleep", "mci", "meaning", 
+                  "smu1", "health", "efs4", "hgs_m", "hgs_f",
+                  "pain", "ls_",  "oral", "efs1_", "hcu2", "hcu3",  "efs5", "efs6", "hcu4", "efs1", "efs14", "moca_")
 
-df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
-df$time <- relevel(as.factor(df$time), ref = "1")
+gen_table(df[df$time %in% c(0,1),], vars = vars, ordinalVars = vars_ordinal, medianVars = NULL, 
+          both_tests = TRUE, member_id = "sopd", pre_name = "T0" , post_name = "T1") %>% clipr::write_clip()
 
-lmer(support~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5d~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(eq5dvas~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(isi~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(gad~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df[df$time %in% c(1,2),]) %>% summary() 
-lmer(loneliness~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_emo~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
-lmer(loneliness_soc~ 1+age_group+female+CD+time*meaning+ (1| case_id) , REML = TRUE, data = df) %>% summary() 
 
-df$support_ <- car::recode(df$support, "1 = 0; 2 = 1")
-glmer_fit <- glmer(support_~ 1+age_group+female+CD+time*meaning+ (1| case_id), family = binomial, data = df) 
-summary(glmer_fit) 
+df$live_ <- ifelse(df$live2 == 1, 2,
+                  ifelse(df$live1 == 1, 1, 
+                         ifelse(df$live4 == 1, 3, NA)))
 
-df$isi_group_ <- car::recode(df$isi_group, "c(1,2) = 0; c(3,4) = 1")
-df$gad_group_ <- car::recode(df$gad_group, "c(1,2) = 0; c(3,4) = 1")
+df$fs_ <- car::recode(df$fs, "
+  0 = 0;
+  1:2 = 1;
+  3:hi = 2
+  ")
 
-library(mixor)
-df <- df[order(df$case_id),]
-df <- droplevels(df) # drop unused levels
-mixor_fit <- mixor(loneliness_emo ~  1+age_group+female+CD+time*meaning ,
-                   data = df, id = case_id, link = "logit") 
-summary(mixor_fit)
+df$smu3_ <- ifelse(df$smu3 == 5, 0, 1)
 
-library(ordinal) # clm
-count <- 2 # starting at 2 due to 1 sometimes would give erroneous highly significant p-value results
-clmm_fit <- clmm(as.factor(support) ~ 1+age_group+female+CD+time*meaning + (1 | case_id), 
-                 data = df, link="logit", Hess=TRUE, nAGQ=count) 
-summary(clmm_fit)
+vars <- c("age", "gender", "live_", "bmi", "bmi2", "md3", "md1", "pain", 
+          "sar", "sar_", "fs", "fs_", "phq", "phq_", "gad", "gad_", "moca", "mci", "efs4", "ls", "ls_", "smu3_", "pase",
+          "hgs", "hgs_", "hgs_m", "hgs_f", "eq5d", "eq5d6", "moca_")
+vars_ordinal <- c("gender", "live_", "bmi2",  "md3", "md1", "pain", "sar_",  "fs_", "phq_", "gad_", "mci", "efs4", "ls_", "smu3_", "hgs_", "hgs_m", "hgs_f", "moca_")
 
-library(multgee)
-multgee_fit <- ordLORgee(support ~ 1+age_group+female+CD+time*meaning ,
-                         data = df, id = case_id, repeated = time,  link = "logit") 
-summary(multgee_fit)
-
-# library(repolr)
-# df <- df[order(df$time),]
-# repolr(ordered(support) ~ 1,
-#        subjects="case_id", data=na.omit(df), times=c(1,2,3), categories=3) %>% summary()
-
-# library(geepack)
-# df <- df[order(df$support),]
-# ordgee(ordered(support) ~ 1+age_group+female+CD+time*meaning,
-#        id = case_id, data = df_) %>% summary()
-
-# library(MCMCglmm)
-# df_ <- df %>% filter(!is.na(support) & !is.na(age_group) & !is.na(female) & !is.na(CD) & !is.na(time) & !is.na(meaning))
-# mcmcglmm_fit <- MCMCglmm(support ~ 1+age_group+female+CD+time*meaning,
-#                          data = df_, random = ~case_id,  family = "ordinal")
-# summary(mcmcglmm_fit)
-
-lmer(meaning~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
-lmer(eq5d~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
-lmer(isi~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df[df$time>=1,], ) %>% summary() 
-lmer(gad~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df[df$time>=1,], ) %>% summary() 
-lmer(loneliness~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
-lmer(loneliness_emo~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
-lmer(loneliness_soc~ 1+age_group+female+CD+time*support+ (1| case_id) , REML = TRUE, data = df, ) %>% summary() 
-
-nlme::lme(EQ5D~ 1+time+meaning+meaning:covid+support+support:covid+CD+CD:covid, random =~ 1 | case_id, 
-                 nlme::corAR1(form = ~ 1 | case_id),
-                 data = df, na.action=na.omit) %>% summary()
-# nlme::ACF(fit)
-
-lmer(EQ5D~ 1+time+CD+CD:covid+ (1| case_id) ,
-     REML = TRUE, data = df) %>% summary()
-
-lmer(meaning~ 1+time+age+female+cssa+alone+EFS4_hist3+ (1 | case_id) ,
-     REML = TRUE, data = df) %>% summary()
-
-lm(meaning.2~ 1+meaning.1+age.2+female+cssa+alone+support.1+support.2, data = dfwide) %>% summary()
-
-# LM charts ----
-ggline(df, x = "time", y = "mci", add = "mean_ci") # %>% ggpar(ylim = c(0, 5.5))
-
-ggerrorplot(df, x = "time", y = "meaning",
-            desc_stat = "mean_ci"
-            , add = "mean", error.plot = "errorbar"
-            , facet.by = c("female", "age_group")
-) # %>% ggpar(ylim = c(0, 5.5))
-
-ggplot(df, aes(x=meaning, y=support, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Social Support") +
-    geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df, aes(x=support, y=meaning, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Social Support", y = "Meaning in life") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df, aes(x=meaning, y=eq5d, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Health-related quality of life (EQ5D-5L)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df, aes(x=meaning, y=eq5dvas, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Health-related quality of life (EQ-VAS)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 1), aes(x=meaning, y=isi, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Insomnia (ISI)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 1), aes(x=meaning, y=gad, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Stress (GAD-7)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Loneliness (DJG)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness_emo, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Emotional loneliness (DJG)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 0), aes(x=meaning, y=loneliness_soc, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Social loneliness (DJG)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df %>% filter(time >= 0), aes(x=meaning, y=phq, color=time, shape=time)) +
-  # geom_point() +
-  labs(x = "Meaning in life", y = "Depression (PHQ)") +
-  geom_smooth(method=lm, aes(fill=time))
-
-ggplot(df, aes(x=date, y=time, color=time, shape=time)) +
-  # geom_point() +
-  geom_smooth(method=lm, aes(fill=time))
-
-# plot data collection dates ----
-df$time <- as.factor(df$time)
-ggplot(df, aes(x=date, color = time)) + 
-  geom_histogram(bins = 200, alpha=0.2,position="identity") +
-  # geom_jitter(height = 0.25) +
-  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
-  theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1))
+tableone::CreateTableOne(data =  df[df$time %in% 0,],
+                         vars = vars, factorVars = vars_ordinal) %>%
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
