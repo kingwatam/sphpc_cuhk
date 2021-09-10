@@ -656,7 +656,7 @@ gen_table2 <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group =
 }
 
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(df, allVars[], NULL, medianVars) %>% clipr::write_clip()
+gen_table(df[df$time %in% 0:1, ], allVars[], NULL, medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
 # baseline & follow-up in same period ----

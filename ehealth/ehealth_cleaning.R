@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-08-16_1105.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-09-10_1610.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 # df$member_id[df$record_id == 3747] <- "YWC01M332"
@@ -27,7 +27,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210816_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210906_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -48,6 +48,8 @@ df$ehealth_eval_timestamp[df$record_id %in% c("846", "852", "857", "872")] <-
 # gsub("\t", "", "\tSAG03M223")
 df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)] <- 
   gsub("\t", "", df$member_id[grepl("\t", df$member_id, ignore.case = TRUE)]) # remove "\t"
+
+# df$member_id <- gsub("[[:space:]]", "", df$member_id) # remove extra spaces
 
 df$ehealth_eval_timestamp <- lubridate::ymd_hms(df$ehealth_eval_timestamp, tz = "Asia/Hong_Kong", quiet =  TRUE)
 
@@ -114,7 +116,7 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs2 <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-08-07.xlsx", sheetName  = "Raw data"
+wbs2 <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-09-04.xlsx", sheetName  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(as.numeric(wbs2$Survey_date), origin = "1899-12-30")
 wbs2$All_forms_completed_date <- as.Date(as.numeric(wbs2$All_forms_completed_date), origin = "1899-12-30")
