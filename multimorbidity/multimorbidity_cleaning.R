@@ -25,6 +25,7 @@ names(df)[names(df) == "medno"] <- "mednof1"
 names(df)[names(df) == "abusebodyf"] <- "abusebodyf1"
 names(df)[names(df) == "abusepplof"] <- "abusepplof1"
 names(df)[names(df) == "oralhealthf0"] <- "oralf0"
+names(df)[names(df) == "somke4f0"] <- "smoke4f0"
 df <- convert2NA(df, c("#N/A", "."))
 
 # extract sat2f1 & sat3f1 data from old dataset
@@ -73,8 +74,8 @@ df$datef1 <- as.Date(df$datef1, origin = "1899-12-30")
 df$phq2tf1 <- df$phq1f1 + df$phq2f1 # PHQ-2
 df$gad2tf1 <- df$gad1f1  + df$gad2f1  # GAD-2
 
-names(df)[names(df) %in% (df %>% select(starts_with("bp12")) %>% names())] <- 
-  sub("bp12", "bpi2", names(df)[names(df) %in% (df %>% select(starts_with("bp12")) %>% names())]) # replace "bp1" with "bpi" for pain 
+names(df)[names(df) %in% (df %>% dplyr::select(starts_with("bp12")) %>% names())] <- 
+  sub("bp12", "bpi2", names(df)[names(df) %in% (df %>% dplyr::select(starts_with("bp12")) %>% names())]) # replace "bp1" with "bpi" for pain 
 
 # only allow those who have done telephone interview to have moca5m 
 df$moca5m1f1 <- ifelse(df$moca5mtf1==1, NA, df$moca5m1f1) 
@@ -102,10 +103,10 @@ df$genderf0 <- ifelse(df$genderf0 == 1, "M", "F")
 df$srsf1 <- ifelse(df$srsf1 == 0, 1, df$srsf1) # likely miscoding, range = 1:3
 
 scoring_t0t1 <- function(df){
-  df %>% select(starts_with("ls") & ends_with("f0")) %>% colnames(.) -> q_ls_f0
-  df %>% select(starts_with("ls") & ends_with("f1")) %>% colnames(.) -> q_ls_f1
-  df %>% select(starts_with("eq5d") & ends_with("f0")) %>% colnames(.) -> q_eq5d_f0
-  df %>% select(starts_with("eq5d") & ends_with("f1")) %>% colnames(.) -> q_eq5d_f1
+  df %>% dplyr::select(starts_with("ls") & ends_with("f0")) %>% colnames(.) -> q_ls_f0
+  df %>% dplyr::select(starts_with("ls") & ends_with("f1")) %>% colnames(.) -> q_ls_f1
+  df %>% dplyr::select(starts_with("eq5d") & ends_with("f0")) %>% colnames(.) -> q_eq5d_f0
+  df %>% dplyr::select(starts_with("eq5d") & ends_with("f1")) %>% colnames(.) -> q_eq5d_f1
   
   df[q_ls_f0[1:3]] <- sapply(df[q_ls_f0[1:3]], car::recode, "
   1:2 = 1
@@ -154,6 +155,11 @@ scoring_t0t1 <- function(df){
                                eq5df0, eq5df1)))
 }
 df <- cbind(df, scoring_t0t1(df))
+
+labels <- var_label(t0t1) %>% unlist %>% as.data.frame() 
+labels$var <- row.names(labels)
+names(labels)[names(labels) == "."] <- "label"
+labels <- labels[, c("var", "label")]
 
 t0t1 <- df
 rm(df)
@@ -266,7 +272,7 @@ t3 <- xlsx::read.xlsx2("COVID-19 2021.xlsx", sheetName  = "Form responses 1"
                        , encoding = "UTF-8"
                        , header = FALSE
 )
-t3 <- t3 %>% select(c(1:5, 7:22, 29:35, 37:56, 6, 36, 23:28)) # reorder columns to match T2's
+t3 <- t3 %>% dplyr::select(c(1:5, 7:22, 29:35, 37:56, 6, 36, 23:28)) # reorder columns to match T2's
 t3 <- t3[2:nrow(t3),] # remove header
 names(t3)[1:5] <- c("Timestamp", "Case.number.", "Patient.initial.", "Age", "datef3")
 t3$Timestamp <- as.Date(as.numeric(t3$Timestamp), origin = "1899-12-30") # Timestamp from Google Form
@@ -324,7 +330,7 @@ names(t3)[53] <- "moca5m1f3"
 names(t3)[54] <- "moca5m2f3"
 names(t3)[55] <- "moca5m3f3"
 names(t3)[56] <- "moca5m4f3"
-q_moca5m <- t3 %>% select(starts_with("moca5m")) %>% names(.)
+q_moca5m <- t3 %>% dplyr::select(starts_with("moca5m")) %>% names(.)
 t3[q_moca5m] <- sapply(t3[q_moca5m], FUN = function(x) ifelse(x == "", NA, x))
 t3[q_moca5m] <- sapply(t3[q_moca5m], as.numeric)
 
@@ -476,7 +482,7 @@ df$agef3 <- as.numeric(df$agef3)
 
 # from wide to long ----
 # create empty columns for each possibility
-vars <- df %>% select(ends_with(sprintf("f%s", 0:3))) %>% colnames %>% stringi::stri_replace_last_regex(str = ., pattern = "f0|f1|f2|f3", replacement = "")  %>% unique()
+vars <- df %>% dplyr::select(ends_with(sprintf("f%s", 0:3))) %>% colnames %>% stringi::stri_replace_last_regex(str = ., pattern = "f0|f1|f2|f3", replacement = "")  %>% unique()
 vars <- vars[order(vars)]
 for (var in vars){
   for (t in sprintf("f%s", 0:3)){
@@ -491,7 +497,7 @@ df$genderf1 <- df$genderf0
 df$genderf2 <- df$genderf0
 
 # all_vars <- sapply(vars, function(x) sprintf(paste0(x, "f%s"), 0:3)) %>% as.vector # all combinations from f0 to f3
-all_vars <- names(df)[names(df) %in% (df %>% select(ends_with(sprintf("f%s", 0:3))) %>% colnames)]
+all_vars <- names(df)[names(df) %in% (df %>% dplyr::select(ends_with(sprintf("f%s", 0:3))) %>% colnames)]
 all_vars <- all_vars[order(all_vars)]
 vars_list <- rep(list(c()), length(vars)) # create 449 empty elements in list
 
@@ -514,10 +520,225 @@ df <- reshape(df,
               times = 0:3,
               direction = "long")
 
+# create more categorical variables ----
+categorize <- function(df){
+  df$bps <- (df$bp1s + df$bp2s)/2 # average systolic BP
+  df$bps <- ifelse(is.na(df$bps), df$bp1s, df$bps)
+  df$bps <- ifelse(is.na(df$bps), df$bp2s, df$bps)
+  
+  df$bpd <- (df$bp1d + df$bp2d)/2 # average systolic BP
+  df$bpd <- ifelse(is.na(df$bpd), df$bp1d, df$bpd)
+  df$bpd <- ifelse(is.na(df$bpd), df$bp2d, df$bpd)
+  
+  df$hypertension <- ifelse(df$bps >= 140 | df$bp2d >= 90, 1, 0)
+  
+  df %>% dplyr::select(starts_with(sprintf("bpi%s", 3:6))) %>% names() -> q_bpi_s # BPI pain severity
+  df %>% dplyr::select(starts_with(sprintf("bpi%s", 10:16))) %>% names() -> q_bpi_i # BPI pain interference
+  df %>% dplyr::select(starts_with(sprintf("iadl%s", 1:5))) %>% names() -> q_iadl # BPI pain interference
+  
+  # reverse code IADL
+  df[q_iadl] <- sapply(df[q_iadl], function(x) ifelse(x == 7, NA, x))
+  df[q_iadl] <- sapply(df[q_iadl], function(x) (x-4)*-1) # from 1:3 to 3:1
+  
+  df <- df %>%
+    mutate(
+      bpi_s = rowSums(.[q_bpi_s], na.rm = FALSE)/4,
+      bpi_i = rowSums(.[q_bpi_i], na.rm = FALSE)/7,
+      iadl = rowSums(.[q_iadl], na.rm = FALSE)/5,
+    )
+  
+  df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
+  df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
+  df$hgs <- pmax(df$hgs_l, df$hgs_r) # average hand-grip strength
+  # df$gender <- to_factor(df$gender)
+  
+  df$hgs_ <- ifelse(is.na(df$hgs) | is.na(df$gender), NA, 
+                    ifelse(df$hgs >= 26 & df$gender == "M" , 1, 
+                           ifelse(df$hgs >= 18 & df$gender == "F" , 1, 0)))
+  
+  # df$sar_ <- ifelse(df$sar >= 4, "SARc-F positive (≥4)", "SARc-F negative (<4)")
+  df$sar_ <- ifelse(df$sar >= 4, 1, 0)
+  
+  # df$phq_ <- car::recode(df$phq, "
+  # 0:4 = 'Normal (<5)';
+  # 5:9 = 'Mild (5-9)';
+  # 10:14 = 'Moderate (10-14)';
+  # 15:19 = 'Moderately severe (15-19)';
+  # 20:hi = 'Severe (20+)'
+  # ")
+  df$phq_ <- car::recode(df$phq, "
+  0:4 = 1;
+  5:9 = 2;
+  10:14 = 3;
+  15:19 = 4;
+  20:hi = 5
+  ")
+  
+  # df$phq2t_ <- ifelse(df$phq2t >= 3, "≥3", "<3")
+  df$phq2t_ <- ifelse(df$phq2t >= 3, 1, 0)
+  
+  # df$gad_ <- car::recode(df$gad, "
+  # 0:4 = 'Very mild (<5)';
+  # 5:9 = 'Mild (5-9)';
+  # 10:14 = 'Moderate (10-14)';
+  # 15:hi = 'Severe (15+)'
+  # ")
+  df$gad_ <- car::recode(df$gad, "
+  0:4 = 1;
+  5:9 = 2;
+  10:14 = 3;
+  15:hi = 4
+  ")
+  
+  # df$gad2t_ <- ifelse(df$gad2t >= 3, "≥3", "<3")
+  df$gad2t_ <- ifelse(df$gad2t >= 3, 1, 0)
+  
+  # df$moca_ <- ifelse(df$moca >= 22, "Normal", "MCI (<22)")
+  df$mci <- ifelse(df$moca >= 22, 0, 1)
+  
+  pase_freq <- function(a, b){
+    if (length(a)!=length(b)){
+      stop("Lengths of a and b must be the same!")
+    }
+    var <- c()
+    for (i in 1:length(a)){
+      if (a[i] %in% 0){
+        var <- c(var, 0)
+      } else if (a[i] %in% 1){
+        var <- c(var, c(0.11,0.32,0.64,1.07)[b[i]])
+      } else if (a[i] %in% 2){
+        var <- c(var, c(0.25,0.75,1.50,2.50)[b[i]])
+      } else if (a[i] %in% 3){
+        var <- c(var,c(0.43,1.29,2.57,4.29)[b[i]])
+      } else if (a[i] %in% NA){
+        var <- c(var, NA)
+      } else {
+        stop("Range exceeds 0-3, check first param!")
+      }
+    }
+    return(var)
+  }
+  
+  pase10 <- ifelse(df$pase10 == 0 | df$pase10b == 0, 0, df$pase10a/7)
+  df$pase <- (20* pase_freq(df$pase2, df$pase2b)  + 21 * pase_freq(df$pase3, df$pase3b)  
+              + 23* (pase_freq(df$pase4, df$pase4b) + pase_freq(df$pase5, df$pase5b)) + 30*pase_freq(df$pase6, df$pase6b)
+              + 25*(df$pase7 + df$pase8) + 30*df$pase9a + 36*df$pase9b + 20*df$pase9c + 35*df$pase9d + 21*pase10)
+  
+  #                                           
+  # df$efs1_ <- ifelse((df$efs1 %in% (1:2) | df$hcuhsp1a %in% 1 | df$hcuhsp1b %in% 1) & !(df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1), 1,
+  #                    ifelse(df$efs1 > 2 | df$hcuhsp1a %in% 2 | df$hcuhsp1b %in% 2 | (df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1), 2,
+  #                           ifelse(df$efs1 %in% 0 | df$hcuhsp1a %in% 0 | df$hcuhsp1b %in% 0, 0, NA)))
+  
+  return(subset(df, select = c(hypertension, bpi_s, bpi_i, hgs, hgs_, sar_, phq_, phq2t_, gad_, gad2t_, mci, iadl, pase)))
+}
+
+df <- cbind(df, categorize(df))
+
+
+df$health <- (df$efs2-2)*-1 # reverse code self-rated health
+
+df$hgs_m <- ifelse(df$gender=="M", df$hgs_, NA)
+df$hgs_f <- ifelse(df$gender=="F", df$hgs_, NA)
+
+df$ls_ <- ifelse(df$ls >= 3, 1, 0)
+
+df$hcu2 <- ifelse(is.na(df$hcu2), pmin(df$hcu2a, 1), df$hcu2) # SOPC
+df$hcu3 <- ifelse(is.na(df$hcu3), pmin(df$hcu3a, 1), df$hcu3) # GOPC
+
+df$hcu1 <- ifelse(df$hcu4 >= 14, df$hcu4, df$hcu1)
+df$hcu4 <- ifelse(df$hcu4 >= 14 & df$time == 0, NA,
+                  ifelse(df$hcu4 >= 1 & df$time == 1, 1, df$hcu4))
+
+# EFS (Edmonton Frail Scale)
+df$hcuhsp1 <- ifelse(df$hcuhsp1a %in% 2 | df$hcuhsp1b %in% 2, 2,
+                     ifelse(df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1, 2,
+                            ifelse(df$hcuhsp1a %in% 1 | df$hcuhsp1b %in% 1, 1,
+                                   ifelse(df$hcuhsp1a %in% 0 | df$hcuhsp1b %in% 0, 0, NA)))) 
+df$efs1_ <- ifelse(is.na(df$efs1), df$hcuhsp1, pmin(df$efs1, 2)) 
+
+q_efs <- c("efs1_", sprintf("efs%s", c(2:13)))
+
+df <- df %>%
+  mutate(
+    efs = rowSums(.[q_efs], na.rm = FALSE)
+  )
+
+df$efs14 <- car::recode(df$efs, "
+0:5 = 1;
+6:7 = 2;
+8:9 = 3;
+10:11 = 4;
+12:hi = 5
+")
+
+df$moca_ <- car::recode(df$moca, "
+lo:18 = 1;
+19:25 = 2;
+26:hi = 3
+")
+
+df$live_ <- ifelse(df$live2 == 1, 2,
+                   ifelse(df$live1 == 1, 1, 
+                          ifelse(df$live4 == 1, 3, NA)))
+
+df$fs_ <- car::recode(df$fs, "
+  0 = 0;
+  1:2 = 1;
+  3:hi = 2
+  ")
+
+df$smu3_ <- ifelse(df$smu3 == 5, 0, 1) # social media use more than once a month
+
+# add variable labels ----
+labels_old <- labels # old labels from Stata data
+labels <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "long"
+                                 , header = TRUE
+)
+
+for (var in names(df)){
+  var_label(df[[var]]) <- labels$label[labels$var %in% var]
+}
+
+dfwide1 <- reshape(df,
+              idvar = c("sopd"), # this line is to keep variables
+              sep = "f", 
+              timevar = "time",
+              direction = "wide")
+
+labels_wide <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "wide"
+                           , header = TRUE
+)
+
+labels_t0 <- data.frame(var = labels_wide$t0, label = labels_wide$t0_description)
+labels_t1 <- data.frame(var = labels_wide$t1, label = labels_wide$t1_description)
+labels_t2 <- data.frame(var = labels_wide$t2, label = labels_wide$t2_description)
+labels_t3 <- data.frame(var = labels_wide$t3, label = labels_wide$t3_description)
+
+labels <- rbind(labels_t0, labels_t1, labels_t2, labels_t3)
+rm(labels_t0, labels_t1, labels_t2, labels_t3, labels_wide)
+
+labels <- convert2NA(labels, "")
+labels <- na.omit(labels) # remove empty rows
+
+dfwide <- dfwide[, colSums(is.na(dfwide)) != nrow(dfwide) |
+                   names(dfwide) %in% c("ratem2f1", "sat4ff1", "sat5df2", "sat5ff1", 
+                                         "note3f1",  "note4f1", "note5f1")] # remove empty columns 
+
+for (var in names(dfwide)){
+  var_label(dfwide[[var]]) <- labels$label[labels$var %in% var]
+}
+
+# save data ----
 saveRDS(df, "t0t1t2t3_data.rds")
 saveRDS(dfwide, "t0t1t2t3_data_wide.rds")
-# write_excel("t0t1t2t3_data.xlsx", df)
-# write_excel("t0t1t2t3_data_wide.xlsx", dfwide)
-# haven::write_sav(df, "t0t1t2t3_data.sav")
 
-# t3 %>% select(starts_with(c("phq", "gad", "ls", "isi", "eq5d", "sar", "efs", "meaning", "sleep"))) %>% summ() 
+# setwd(sprintf("~%s/multimorbidity/data", setpath))
+# write_excel("MM_long_20210910.xlsx", df)
+# write_excel("MM_wide_20210910.xlsx", dfwide)
+# haven::write_sav(df, "MM_long_20210910.sav")
+# haven::write_sav(dfwide, "MM_wide_20210910.sav")
+# haven::write_dta(df, "MM_long_20210910.dta")
+# haven::write_dta(dfwide, "MM_wide_20210910.dta")
+
+# t3 %>% dplyr::select(starts_with(c("phq", "gad", "ls", "isi", "eq5d", "sar", "efs", "meaning", "sleep"))) %>% summ() 
+
