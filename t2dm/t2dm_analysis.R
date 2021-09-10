@@ -57,7 +57,7 @@ df$hyperchol_prev2 <- car::recode(df$hyperchol_prev,
                                    ")
 df$hyperchol_prev2 <- relevel(df$hyperchol_prev2, ref = "Never had hypercholesterolaemia")
 df$Q10 <- drop_unused_value_labels(df$Q10) %>% to_factor()
-df$health <- (as.numeric(df$Q10)-6)*-1 # reverse self rate health from lower as better to lower as worse
+df$health <- (as.numeric(df$Q10)-6)*-1 # reverse self rated health from lower as better to lower as worse
 df$smoking <- drop_unused_value_labels(df$smoking) %>% to_factor()
 df$checkup <- drop_unused_value_labels(df$checkup) %>% to_factor()
 df$checkup <- ifelse(df$checkup == "Yes", 1, ifelse(df$checkup == "No", 0, NA))
