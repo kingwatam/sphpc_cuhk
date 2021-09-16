@@ -8,6 +8,7 @@
 ##
 ## Notes:
 ## %!in% operater negates %in%
+## View_() # Same as View(as.data.frame())
 ## summ() & tab() work like sum & tab functions in Stata
 ## summ() e.g. summ(df$var1, df$var2, ...) or summ(df1, df2, ...) or sum(df$var1, df2)
 ## tab() e.g. tab(df$var1, df$var2, df$var3...)
@@ -37,6 +38,12 @@
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
 '%!in%' <- Negate('%in%')
+
+View_ <- function(obj){
+  # object_name <- deparse(substitute(object)) 
+  obj <- as.data.frame(obj)
+  return(View(obj))
+} 
 
 sum_func <- function(x, var_name, showClass) { # sum_func() is used inside summ()
   argx <- var_name
@@ -321,7 +328,8 @@ write_excel <- function(filename = "sheet.xlsx", ..., remove_char =  NULL){
 }
 
 iferror <- function(expr, error_expr){
-  tryCatch(expr, 
+  tryCatch(expr,
+           warning=function(w){warning_expr},
            error=function(e){error_expr}
   )
 }
