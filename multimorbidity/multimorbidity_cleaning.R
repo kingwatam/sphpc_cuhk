@@ -699,7 +699,7 @@ for (var in names(df)){
   var_label(df[[var]]) <- labels$label[labels$var %in% var]
 }
 
-dfwide1 <- reshape(df,
+dfwide <- reshape(df,
               idvar = c("sopd"), # this line is to keep variables
               sep = "f", 
               timevar = "time",
@@ -727,6 +727,38 @@ dfwide <- dfwide[, colSums(is.na(dfwide)) != nrow(dfwide) |
 for (var in names(dfwide)){
   var_label(dfwide[[var]]) <- labels$label[labels$var %in% var]
 }
+
+# merge with activity data ----
+temp <- xlsx::read.xlsx2("attendance 2016-2019 JC project.xlsx", sheetName  = "Sheet1"
+                                  , header = TRUE
+)
+names(temp)[names(temp) == "SOPC.no."] <- "sopd"
+temp$sopd <-  gsub("[[:space:]]", "", toupper(temp$sopd))
+for (i in 1:nrow(temp)){ # update SOPD IDs
+  if (temp$sopd[i] %!in% unique(df$sopd)){
+    new_id <- NA # reset variable
+    old_id <- temp$sopd[i]
+    new_id <- sopd$corrected[grepl(old_id, sopd$initial, ignore.case = TRUE)]
+    new_id <- ifelse(is.na(new_id), sopd$corrected[grepl(old_id, sopd$follow.up, ignore.case = TRUE)], new_id)
+    temp$sopd[i] <- ifelse(length(new_id)==0, temp$sopd[i], new_id)
+  }
+}
+temp$sopd[temp$sopd == "GLYH0414275U"] <- "0GLYH0414275U"
+temp$sopd[temp$sopd == "GLYH0611502N"] <- "GLYH0611542N"
+temp$sopd[temp$sopd == "GYCK0913931(V)"] <- "GLYH1811461N"
+
+names(temp)[names(temp) == "attendance.of.Exercise.Class"] <- "exclass_att"
+names(temp)[names(temp) == "the.number.of.exercise.course"] <- "exclass_num"
+names(temp)[names(temp) == "attendance.ofChronic.disease.BMI"] <- "bmiclass_att"
+names(temp)[names(temp) == "the.number.of.Chronic.disease.BMI.course"] <- "bmiclass_num"
+names(temp)[names(temp) == "attendance.ofSocial..Loneliness"] <- "loneliclass_att"
+names(temp)[names(temp) == "the.number.of..Social..Loneliness.course"] <- "loneliclass_num"
+names(temp)[names(temp) == "attendance.ofDepression.Anxiety.insomnia"] <- "pychoclass_att"
+names(temp)[names(temp) == "the.number.of.Depression.Anxiety.insomnia.course"] <- "pychoclass_num"
+names(temp)[names(temp) == "MCI"] <- "mci_num"
+names(temp)[names(temp) == "Talk"] <- "talk_num"
+temp[3:12] <- sapply(temp[3:12], as.numeric)
+
 
 # save data ----
 saveRDS(df, "t0t1t2t3_data.rds")
