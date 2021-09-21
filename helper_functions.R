@@ -35,6 +35,7 @@
 ## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
 ## gen_reg() generates the results for each model to be used by combine_tables() 
 ## save_() works the same as save() with user-defined names for objects
+## timeout_skip() skips when running time exceeds a set amount
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
 '%!in%' <- Negate('%in%')
@@ -327,11 +328,18 @@ write_excel <- function(filename = "sheet.xlsx", ..., remove_char =  NULL){
   return(write_xlsx(wb, filename))
 }
 
-iferror <- function(expr, error_expr){
-  tryCatch(expr,
-           warning=function(w){warning_expr},
-           error=function(e){error_expr}
-  )
+iferror <- function(expr, error_expr, ifwarning = FALSE){
+  if (ifwarning){
+    tryCatch(expr,
+             warning=function(w){warning_expr},
+             error=function(e){error_expr}
+    )
+  } else {
+    tryCatch(expr,
+             error=function(e){error_expr}
+    )
+  }
+
 }
 
 ifwarning <- function(expr, warning_expr){
@@ -448,13 +456,14 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
 
-gen_reg <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3){ 
+gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3){ 
   require(lmerTest)
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
   row_count <- 1
   col_count <- 2
   
-  dep_var <- as.character(formula(fit)[2])
+  iferror(dep_var <- ifelse(is.null(dep_var), as.character(terms(fit))[[2]], dep_var),
+          dep_var <- as.character(formula(fit)[2]))
   
   if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
     n <- iferror(nobs(fit), NA)
@@ -582,13 +591,13 @@ gen_reg <- function(fit, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, ex
   return(table)
 }
 
-combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
+combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
-      table <- gen_reg(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
       next
     }
-    new_table <- gen_reg(list(...)[[i]], adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+    new_table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
     dep_vars <- names(table)
     dep_var <- names(new_table)[2]
     names(table) <- c("X1",rep(2:ncol(table)))
@@ -602,6 +611,14 @@ combine_tables <- function(table = NULL, ..., adjusted_r2 = FALSE, show_p = FALS
 save_ <- function(..., file) { # https://stackoverflow.com/questions/21248065/r-rename-r-object-while-save-ing-it
   x <- list(...)
   save(list=names(x), file=file, envir=list2env(x))
+}
+
+timeout_skip <- function(expression, timeout){
+  tryCatch(
+    expr = R.utils::withTimeout(expression,
+                                timeout = timeout),  
+    TimeoutException = function(ex) cat("Timeout. Skipping.\n")
+  )
 }
 
 # robust SEs for lm()
