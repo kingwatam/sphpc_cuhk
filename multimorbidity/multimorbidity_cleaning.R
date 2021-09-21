@@ -689,45 +689,6 @@ df$fs_ <- car::recode(df$fs, "
 
 df$smu3_ <- ifelse(df$smu3 == 5, 0, 1) # social media use more than once a month
 
-# add variable labels ----
-labels_old <- labels # old labels from Stata data
-labels <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "long"
-                                 , header = TRUE
-)
-
-for (var in names(df)){
-  var_label(df[[var]]) <- labels$label[labels$var %in% var]
-}
-
-dfwide <- reshape(df,
-              idvar = c("sopd"), # this line is to keep variables
-              sep = "f", 
-              timevar = "time",
-              direction = "wide")
-
-labels_wide <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "wide"
-                           , header = TRUE
-)
-
-labels_t0 <- data.frame(var = labels_wide$t0, label = labels_wide$t0_description)
-labels_t1 <- data.frame(var = labels_wide$t1, label = labels_wide$t1_description)
-labels_t2 <- data.frame(var = labels_wide$t2, label = labels_wide$t2_description)
-labels_t3 <- data.frame(var = labels_wide$t3, label = labels_wide$t3_description)
-
-labels <- rbind(labels_t0, labels_t1, labels_t2, labels_t3)
-rm(labels_t0, labels_t1, labels_t2, labels_t3, labels_wide)
-
-labels <- convert2NA(labels, "")
-labels <- na.omit(labels) # remove empty rows
-
-dfwide <- dfwide[, colSums(is.na(dfwide)) != nrow(dfwide) |
-                   names(dfwide) %in% c("ratem2f1", "sat4ff1", "sat5df2", "sat5ff1", 
-                                         "note3f1",  "note4f1", "note5f1")] # remove empty columns 
-
-for (var in names(dfwide)){
-  var_label(dfwide[[var]]) <- labels$label[labels$var %in% var]
-}
-
 # merge with activity data ----
 temp <- xlsx::read.xlsx2("attendance 2016-2019 JC project.xlsx", sheetName  = "Sheet1"
                                   , header = TRUE
@@ -749,16 +710,76 @@ temp$sopd[temp$sopd == "GYCK0913931(V)"] <- "GLYH1811461N"
 
 names(temp)[names(temp) == "attendance.of.Exercise.Class"] <- "exclass_att"
 names(temp)[names(temp) == "the.number.of.exercise.course"] <- "exclass_num"
-names(temp)[names(temp) == "attendance.ofChronic.disease.BMI"] <- "bmiclass_att"
-names(temp)[names(temp) == "the.number.of.Chronic.disease.BMI.course"] <- "bmiclass_num"
-names(temp)[names(temp) == "attendance.ofSocial..Loneliness"] <- "loneliclass_att"
-names(temp)[names(temp) == "the.number.of..Social..Loneliness.course"] <- "loneliclass_num"
+names(temp)[names(temp) == "attendance.ofChronic.disease.BMI"] <- "diseaseclass_att"
+names(temp)[names(temp) == "the.number.of.Chronic.disease.BMI.course"] <- "diseaseclass_num"
+names(temp)[names(temp) == "attendance.ofSocial..Loneliness"] <- "socialclass_att"
+names(temp)[names(temp) == "the.number.of..Social..Loneliness.course"] <- "socialclass_num"
 names(temp)[names(temp) == "attendance.ofDepression.Anxiety.insomnia"] <- "pychoclass_att"
 names(temp)[names(temp) == "the.number.of.Depression.Anxiety.insomnia.course"] <- "pychoclass_num"
-names(temp)[names(temp) == "MCI"] <- "mci_num"
-names(temp)[names(temp) == "Talk"] <- "talk_num"
+names(temp)[names(temp) == "MCI"] <- "mci_att"
+names(temp)[names(temp) == "Talk"] <- "talk_att"
 temp[3:12] <- sapply(temp[3:12], as.numeric)
+temp$mci_num <- ifelse(temp$mci_att > 0, 1, 0) # for calculation
+temp$talk_num <- ifelse(temp$talk_att > 0, 1, 0) # for calculation
 
+temp %>% dplyr::select(ends_with("_att")) %>% colnames(.) -> q_att
+temp %>% dplyr::select(ends_with("_num")) %>% colnames(.) -> q_num
+temp <- temp %>%
+  mutate(
+    activity_att = rowSums(.[q_att], na.rm = FALSE),
+    activity_num = rowSums(.[q_num], na.rm = FALSE),
+    activity_cat = rowSums(.[q_att] > 0, na.rm = FALSE) # number of classes by main categories
+  )
+temp$mci_num <- NULL # remove after calculation
+temp$talk_num <- NULL # remove after calculation
+
+temp$time <- 1
+temp1 <- temp
+temp1$time <- 0
+temp <- rbind(temp, temp1)
+rm(temp1)
+
+df <- merge(df, temp %>% subset(select=-Name), # extract item matched by case ID
+            by=c("sopd", "time"), all.x = TRUE)
+
+# add variable labels ----
+labels_old <- labels # old labels from Stata data
+labels <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "long"
+                           , header = TRUE
+)
+
+for (var in names(df)){
+  var_label(df[[var]]) <- labels$label[labels$var %in% var]
+}
+
+dfwide <- reshape(df,
+                  idvar = c("sopd"), # this line is to keep variables
+                  sep = "f", 
+                  timevar = "time",
+                  direction = "wide")
+
+labels_wide <- xlsx::read.xlsx2("MM_variables.xlsx", sheetName  = "wide"
+                                , header = TRUE
+)
+
+labels_t0 <- data.frame(var = labels_wide$t0, label = labels_wide$t0_description)
+labels_t1 <- data.frame(var = labels_wide$t1, label = labels_wide$t1_description)
+labels_t2 <- data.frame(var = labels_wide$t2, label = labels_wide$t2_description)
+labels_t3 <- data.frame(var = labels_wide$t3, label = labels_wide$t3_description)
+
+labels <- rbind(labels_t0, labels_t1, labels_t2, labels_t3)
+rm(labels_t0, labels_t1, labels_t2, labels_t3, labels_wide)
+
+labels <- convert2NA(labels, "")
+labels <- na.omit(labels) # remove empty rows
+
+dfwide <- dfwide[, colSums(is.na(dfwide)) != nrow(dfwide) |
+                   names(dfwide) %in% c("ratem2f1", "sat4ff1", "sat5df2", "sat5ff1", 
+                                        "note3f1",  "note4f1", "note5f1")] # remove empty columns 
+
+for (var in names(dfwide)){
+  var_label(dfwide[[var]]) <- labels$label[labels$var %in% var]
+}
 
 # save data ----
 saveRDS(df, "t0t1t2t3_data.rds")
