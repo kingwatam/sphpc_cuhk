@@ -236,3 +236,52 @@ vars_ordinal <- c("gender", "live_", "bmi2",  "md3", "md1", "pain", "sar_",  "fs
 tableone::CreateTableOne(data =  df[df$time %in% 0,],
                          vars = vars, factorVars = vars_ordinal) %>%
   print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+# activity data analysis ----
+table <- combine_tables(NULL, 
+                        dep_var = paste0("bmi", "f1 - ", "bmi", "f0"),
+                        lm(I(bmif1-bmif0) ~ 1 + exclass_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + exclass_numf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + diseaseclass_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + diseaseclass_numf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + socialclass_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + socialclass_numf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + pychoclass_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + pychoclass_numf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + mci_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + talk_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + activity_attf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + activity_numf1, data = dfwide),
+                        lm(I(bmif1-bmif0) ~ 1 + activity_catf1, data = dfwide)
+)
+
+vars <- c("height", "waist", "hypertension", "hgs", "hgs_",  "sar", "sar_", "bpi_s", "bpi_i", "iadl", "pain", "srs",
+          "phq2t", "gad2t", 
+          "ls", "ls_e", "ls_s", "ls_", 
+          "sleep", "isi", "meaning", "eq5d", "eq5d6", "moca", "mci", "smu1", "health",
+          "efs4", "efs5", "efs6", 
+          "hgs_m", "hgs_f", "pain", "oral", "efs1_", "hcu2", "hcu3", "hcu4", "hcu1", "efs"
+)
+
+for (var in vars){
+  temp <- combine_tables(NULL, 
+                         dep_var = paste0(var, "f1 - ", var, "f0"),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + exclass_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + exclass_numf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + diseaseclass_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + diseaseclass_numf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + socialclass_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + socialclass_numf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + pychoclass_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + pychoclass_numf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + mci_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + talk_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + activity_attf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + activity_numf1, data = dfwide),
+                                                 lm(I(get_(var, "f1") - get_(var, "f0")) ~ 1 + activity_catf1, data = dfwide)
+                                                 )
+  colnames <- c(names(table), names(temp)[2:ncol(temp)])
+  table <- cbind(table, temp[2:ncol(temp)])
+  names(table) <- colnames
+  # rm(temp)
+}
