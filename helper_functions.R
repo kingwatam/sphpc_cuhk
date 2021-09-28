@@ -462,9 +462,10 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
   row_count <- 1
   col_count <- 2
   
-  iferror(dep_var <- ifelse(is.null(dep_var), as.character(terms(fit))[[2]], dep_var),
-          dep_var <- as.character(formula(fit)[2]))
-  
+  if (is.null(dep_var)){
+    dep_var <- as.character(terms(fit))[[2]] # as.character(formula(fit)[2])
+  }
+
   if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
     n <- iferror(nobs(fit), NA)
     n_unique <- iferror(summary(fit)$ngrps, NA)
@@ -592,14 +593,19 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
 }
 
 combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
+  dep_var_saved <- dep_var
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
       table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
       next
     }
-    new_table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+    if (is.null(dep_var_saved)){
+      new_table <- gen_reg(list(...)[[i]], dep_var = NULL, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      dep_var <- names(new_table)[2]
+    } else {
+      new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+    }
     dep_vars <- names(table)
-    dep_var <- names(new_table)[2]
     names(table) <- c("X1",rep(2:ncol(table)))
     table <- plyr::join(table, new_table, by=c("X1"), type="full")
     names(table) <- c(dep_vars, dep_var)
