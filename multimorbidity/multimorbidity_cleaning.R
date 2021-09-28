@@ -530,7 +530,7 @@ categorize <- function(df){
   df$bpd <- ifelse(is.na(df$bpd), df$bp1d, df$bpd)
   df$bpd <- ifelse(is.na(df$bpd), df$bp2d, df$bpd)
   
-  df$hypertension <- ifelse(df$bps >= 140 | df$bp2d >= 90, 1, 0)
+  df$ht <- ifelse(df$bps >= 140 | df$bp2d >= 90, 1, 0)
   
   df %>% dplyr::select(starts_with(sprintf("bpi%s", 3:6))) %>% names() -> q_bpi_s # BPI pain severity
   df %>% dplyr::select(starts_with(sprintf("bpi%s", 10:16))) %>% names() -> q_bpi_i # BPI pain interference
@@ -629,7 +629,7 @@ categorize <- function(df){
   #                    ifelse(df$efs1 > 2 | df$hcuhsp1a %in% 2 | df$hcuhsp1b %in% 2 | (df$hcuhsp1a %in% 1 & df$hcuhsp1b %in% 1), 2,
   #                           ifelse(df$efs1 %in% 0 | df$hcuhsp1a %in% 0 | df$hcuhsp1b %in% 0, 0, NA)))
   
-  return(subset(df, select = c(hypertension, bpi_s, bpi_i, hgs, hgs_, sar_, phq_, phq2t_, gad_, gad2t_, mci, iadl, pase)))
+  return(subset(df, select = c(ht, bpi_s, bpi_i, hgs, hgs_, sar_, phq_, phq2t_, gad_, gad2t_, mci, iadl, pase)))
 }
 
 df <- cbind(df, categorize(df))

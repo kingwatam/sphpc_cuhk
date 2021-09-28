@@ -31,8 +31,9 @@ df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
 
 # df$yearmonth <- zoo::as.yearmon(df$ehealth_eval_timestamp)
 # df$yearmonth <- match(df$yearmonth, unique(df$yearmonth)[order(unique(df$yearmonth))])
-df$surveydate <- as.Date(df$ehealth_eval_timestamp)
-df$surveydate <- match(df$surveydate, unique(df$surveydate)[order(unique(df$surveydate))])
+# df$surveydate <- as.Date(df$ehealth_eval_timestamp)
+# df$surveydate <- match(df$surveydate, unique(df$surveydate)[order(unique(df$surveydate))]) # this skips some empty days
+df$surveydate <- as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03') # days since first recorded survey date
 
 # total score of diet items ----
 scoring <- function(df){
@@ -85,7 +86,8 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_dp1", "Amount of grains in a meal"),  
                        c("diet_dp3", "Amount of vegetables per day"),  
                        c("diet_dp4", "Amount of fruit per day"),  
-                       c("diet_dp5", "Amount of meat/poultry/fish/egg per day")), dim = c(2,33)))
+                       c("diet_dp5", "Amount of meat/poultry/fish/egg per day"), 
+                       c("diet_sum", "Diet score")), dim = c(2,34)))
 
 # restrict sample to age >= 60 ----
 # df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-07-19'),]
@@ -366,7 +368,10 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   col_dif <- 6 # difference
   col_pval <- 7 # p-value
   
-  df2 <- df %>% add_count(member_id) %>% filter(n == 2) # keep only those with both T0 & T1
+  pre <- unique(df$time)[1]
+  post <- unique(df$time)[2]
+  
+  df2 <- df %>% add_count(member_id, name = "n") %>% filter(n == 2) # keep only those with both T0 & T1
   
   dfwide <- reshape(data=df, idvar= c("member_id"),
                      timevar = group,
@@ -389,7 +394,7 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   
   table[row_count, 1] <- "N"
   table[row_count, 2] <- ""
-    table[row_count, col_bl] <-  nrow(dfwide)
+  table[row_count, col_bl] <-  nrow(df[df[[group]] == pre,])
   table[row_count, col_bl2] <-  nrow(dfwide2)
   table[row_count, col_f1] <-  nrow(dfwide2)
   
@@ -414,7 +419,7 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
       table[row_count, 1] <- var
       
       wilcox_test <-  
-        wilcox.test(dfwide2[[paste0(var, ".0")]], dfwide2[[paste0(var, ".1")]], paired = paired) 
+        wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
       if (wilcox_test$p.value < 0.001){
         table[row_count, col_pval] <- "<0.001"
       } else {
@@ -433,18 +438,18 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
           prop.table() %>% as.data.frame() %>% 
           .[which(.$Var1 %in% val),"Freq"] 
         
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == 0)])){
+        if (val %in% unique(df2_en[[var]][which(df2[[group]] == pre)])){
           table[row_count, col_bl2] <- iferror(
-            table(df2_en[[var]][which(df2[[group]] == 0)],useNA = "ifany") %>%
+            table(df2_en[[var]][which(df2[[group]] == pre)],useNA = "ifany") %>%
             prop.table() %>% as.data.frame() %>%
             .[which(.$Var1 %in% val),"Freq"], NA)
         } else {
           table[row_count, col_bl2]  <- 0
         }
         
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == 1)])){
+        if (val %in% unique(df2_en[[var]][which(df2[[group]] == post)])){
           table[row_count, col_f1] <-
-            table(df2_en[[var]][which(df2[[group]] == 1)],useNA = "ifany") %>%
+            table(df2_en[[var]][which(df2[[group]] == post)],useNA = "ifany") %>%
             prop.table() %>% as.data.frame() %>%
             .[which(.$Var1 %in% val),"Freq"]
         } else {
@@ -463,13 +468,13 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
       table[row_count, 1] <- var
       
       table[row_count, 2] <- "mean (sd)"
-      table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == 0)])
-      table[row_count, col_bl2] <- get_mean_sd(df2[[var]][which(df2[[group]] == 0)])
-      table[row_count, col_f1] <-  get_mean_sd(df2[[var]][which(df2[[group]] == 1)])
+      table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == pre)])
+      table[row_count, col_bl2] <- get_mean_sd(df2[[var]][which(df2[[group]] == pre)])
+      table[row_count, col_f1] <-  get_mean_sd(df2[[var]][which(df2[[group]] == post)])
       
       t_test <-  
-        t.test(dfwide2[[paste0(var, ".0")]], dfwide2[[paste0(var, ".1")]], paired = paired) 
-      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == 1)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == 0)], na.rm = TRUE)) %>% round(digits = 2)
+        t.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = 2)
       if (t_test$p.value < 0.001){
         table[row_count, col_pval] <- "<0.001"
       } else {
@@ -482,167 +487,13 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
     if (var %in% medianVars){
       table[row_count, 2] <- "median (Q1-Q3)"
       table[row_count, col_bl] <-  get_median_iqr(df[[var]])
-      table[row_count, col_bl2] <- get_median_iqr(df2[[var]][which(df2[[group]] == 0)])
-      table[row_count, col_f1] <-  get_median_iqr(df2[[var]][which(df2[[group]] == 1)])
+      table[row_count, col_bl2] <- get_median_iqr(df2[[var]][which(df2[[group]] == pre)])
+      table[row_count, col_f1] <-  get_median_iqr(df2[[var]][which(df2[[group]] == post)])
       
-      table[row_count, col_dif] <- (median(df2[[var]][which(df2[[group]] == 1)], na.rm = TRUE) - median(df2[[var]][which(df2[[group]] == 0)], na.rm = TRUE)) 
-      
-      wilcox_test <-  
-        wilcox.test(dfwide2[[paste0(var, ".0")]], dfwide2[[paste0(var, ".1")]], paired = paired) 
-      if (wilcox_test$p.value < 0.001){
-        table[row_count, col_pval] <- "<0.001"
-      } else {
-        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = 3)
-      }
-      
-      row_count <- row_count + 1
-    }
-  }
-  return(table)
-}
-
-gen_table2 <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = "time"){ 
-  table <- data.frame(matrix(ncol = 7,  nrow = 0))
-  row_count <- 1
-  col_bl <- 3
-  col_bl2 <- 4 # matched baseline 
-  col_f1 <- 5 # matched baseline 
-  col_dif <- 6 # difference
-  col_pval <- 7 # p-value
-  
-  df2 <- df %>% add_count(member_id) %>% filter(n == 2) # keep only those with both T0 & T1
-  
-  dfwide <- reshape(data=df, idvar= c("member_id"),
-                    timevar = group,
-                    direction="wide")
-  
-  dfwide2 <- reshape(data=df2, idvar= c("member_id"),
-                     timevar = group,
-                     direction="wide")
-  
-  df_en <- to_English(to_character_df(df, ordinalVars))
-  df2_en <- to_English(to_character_df(df2, ordinalVars))
-  
-  colnames(table)[1] <- ""
-  colnames(table)[2] <- ""
-  colnames(table)[col_bl] <- "Baseline (all)"
-  colnames(table)[col_bl2] <- "Baseline (paired)"
-  colnames(table)[col_f1] <- "6 months (paired)"
-  colnames(table)[col_dif] <- "Difference"
-  colnames(table)[col_pval] <- "p-value"
-  
-  table[row_count, 1] <- "N"
-  table[row_count, 2] <- ""
-  table[row_count, col_bl] <-  nrow(dfwide)
-  table[row_count, col_bl2] <-  nrow(dfwide2)
-  table[row_count, col_f1] <-  nrow(dfwide2)
-  
-  row_count <- row_count + 1
-  
-  get_mean_sd <- function(x){
-    mean <- mean(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
-    sd <- sd(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
-    return(paste0(mean, " (", sd, ")"))
-  }
-  
-  get_median_iqr <- function(x){
-    median <- median(x, na.rm = TRUE) %>% round_format(decimal_places = 0)
-    q1 <- quantile(x, probs =  0.25) %>% round_format(decimal_places = 0)
-    q3 <- quantile(x, probs =  0.75) %>% round_format(decimal_places = 0)
-    
-    return(paste0(median, " (", q1, "-", q3, ")"))
-  }
-  
-  for (var in vars){
-    print(var)
-    if (var %in% ordinalVars){
-      table[row_count, 1] <- var
-      
-      count <- 2 # starting at 2+ due to 1 sometimes would give erroneous highly significant p-value results
-      clmm_model <- 
-        clmm(as.factor(get(var)) ~ time + (1 | member_id), data = df2, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=count)
-      trycatchNA(clmm_p <- summary(clmm_model)$coef["time",4])
-      # print(summary(clmm_model))
-      while( is.na(table[row_count, col_pval]) & count <= 27){
-        print(count)
-        clmm_model <- update(clmm_model, nAGQ = count)
-        # print(summary(clmm_model))
-        trycatchNA(clmm_or <- exp(summary(clmm_model)$coef["time",1]))
-        trycatchNA(clmm_p <- summary(clmm_model)$coef["time",4])
-        table[row_count, col_pval] <- ifelse(clmm_p %in% c("NA", "NaN"), NA, clmm_p)
-        
-        count <- max(count+1, floor((count^2)/3)) # fast growing count
-      }   
-      table[row_count, col_pval] <- ifelse(clmm_p < 0.001, "<0.001", round(table[row_count, col_pval], 3))
-
-      for (val in unique(df_en[[var]])[order(unique(df_en[[var]]))]){
-        table[row_count, 2] <- val
-        
-        if (val %in% NA){
-          table[row_count, 2] <- "N/A"
-        }
-        
-        table[row_count, col_bl] <- 
-          table(df_en[[var]],useNA = "ifany") %>% 
-          prop.table() %>% as.data.frame() %>% 
-          .[which(.$Var1 %in% val),"Freq"] 
-        
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == 0)])){
-          table[row_count, col_bl2] <- iferror(
-            table(df2_en[[var]][which(df2[[group]] == 0)],useNA = "ifany") %>%
-              prop.table() %>% as.data.frame() %>%
-              .[which(.$Var1 %in% val),"Freq"], NA)
-        } else {
-          table[row_count, col_bl2]  <- 0
-        }
-        
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == 1)])){
-          table[row_count, col_f1] <-
-            table(df2_en[[var]][which(df2[[group]] == 1)],useNA = "ifany") %>%
-            prop.table() %>% as.data.frame() %>%
-            .[which(.$Var1 %in% val),"Freq"]
-        } else {
-          table[row_count, col_f1]  <- 0 
-        }
-        
-        table[row_count, col_dif] <- as.numeric(table[row_count, col_f1]) - as.numeric(table[row_count, col_bl2])
-        table[row_count, col_bl] <- table[row_count, col_bl] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_bl2] <- table[row_count, col_bl2] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_f1] <- table[row_count, col_f1] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_dif] <- table[row_count, col_dif] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        
-        row_count <- row_count + 1
-      }
-    } else {
-      table[row_count, 1] <- var
-      
-      table[row_count, 2] <- "mean (sd)"
-      table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == 0)])
-      table[row_count, col_bl2] <- get_mean_sd(df2[[var]][which(df2[[group]] == 0)])
-      table[row_count, col_f1] <-  get_mean_sd(df2[[var]][which(df2[[group]] == 1)])
-      
-      t_test <-  
-        t.test(dfwide2[[paste0(var, ".0")]], dfwide2[[paste0(var, ".1")]], paired = paired) 
-      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == 1)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == 0)], na.rm = TRUE)) %>% round(digits = 2)
-      if (t_test$p.value < 0.001){
-        table[row_count, col_pval] <- "<0.001"
-      } else {
-        table[row_count, col_pval] <- t_test$p.value %>% round(digits = 3)
-      }
-      
-      row_count <- row_count + 1
-    }
-    
-    if (var %in% medianVars){
-      table[row_count, 2] <- "median (Q1-Q3)"
-      table[row_count, col_bl] <-  get_median_iqr(df[[var]])
-      table[row_count, col_bl2] <- get_median_iqr(df2[[var]][which(df2[[group]] == 0)])
-      table[row_count, col_f1] <-  get_median_iqr(df2[[var]][which(df2[[group]] == 1)])
-      
-      table[row_count, col_dif] <- (median(df2[[var]][which(df2[[group]] == 1)], na.rm = TRUE) - median(df2[[var]][which(df2[[group]] == 0)], na.rm = TRUE)) 
+      table[row_count, col_dif] <- (median(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - median(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) 
       
       wilcox_test <-  
-        wilcox.test(dfwide2[[paste0(var, ".0")]], dfwide2[[paste0(var, ".1")]], paired = paired) 
+        wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
       if (wilcox_test$p.value < 0.001){
         table[row_count, col_pval] <- "<0.001"
       } else {
@@ -656,11 +507,12 @@ gen_table2 <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group =
 }
 
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(df[df$time %in% 0:1, ], allVars[], NULL, medianVars) %>% clipr::write_clip()
+gen_table(df[df$time %in% c(1,2), ], vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
 # baseline & follow-up in same period ----
-temp <- df[, c(1:107)]
+# temp <- df[, c(1:107)]
+temp <- df[df$time %in% c(0,1), ]
 temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
                (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') | 
                   as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
@@ -724,6 +576,7 @@ temp$marital <- to_factor(temp$marital)
 temp$educ <- to_factor(temp$educ)
 temp$living_status <- to_factor(temp$living_status)
 temp$housing_type <- to_factor(temp$housing_type)
+temp$gender <- as.factor(temp$gender)
 # matched.out <- matchit(time ~ gender + age + marital + educ + living_status + housing_type + risk_score,
 #                  data = temp, method = "optimal"
 #                  # , distance='mahalanobis'

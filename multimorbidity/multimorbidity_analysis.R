@@ -36,7 +36,7 @@ gen_table <- function(df, vars, ordinalVars, medianVars, both_tests = FALSE, pai
   post <- unique(df$time)[2]
   
   df <- df[df$time %in% c(pre,post) & df$date %!in% NA,] # restrict to only T0 & T1 data
-  df2 <- df %>% add_count(sopd) %>% filter(n==2) # keep only those with both T0 & T1
+  df2 <- df %>% add_count(get(member_id)) %>% filter(n==2) # keep only those with both T0 & T1
   
   dfwide <- reshape(data=df, idvar= c(member_id),
                     timevar = group,
