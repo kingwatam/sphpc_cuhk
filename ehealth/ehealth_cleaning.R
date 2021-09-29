@@ -163,9 +163,22 @@ for (i in c("wbs"
 }
 
 
-vars <- c("member_id", "gender", "dob", "wbs_survey_date",
-          "marital", "educ", "living_status", "housing_type",
-          "risk_score", "risk_level", "digital")
+# vars <- c("gender", "dob", "wbs_survey_date",
+#           "marital", "educ", "living_status", "housing_type",
+#           "risk_score", "risk_level", "digital", )
+
+
+vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
+          "Phase1_member_self_report", "DH_centre_member", "Carer", "Hypertension", "Hypertension_HA",
+          "Diabetes", "Diabetes_HA", "Cholesterol", "Heart", "Heart_score", "Stroke", "Copd", "Renal", 
+          "Disease_other", "Disease_other_indicate", "marital", "educ", "Income_oaa", "Income_oala", 
+          "Income_ssa", "Income_work", "Income_saving", "Income_cssa", "Income_cssa_score", "Income_pension",
+          "Income_child", "Income_other", "living_status", "housing_type", "Rent", "Own", "FS1", "FS2", "FS3",
+          "FS4", "FS5", "FS_total", "FS_score", "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5", "SAR_total", "AMIC",
+          "AMIC_score", "Self_rated_health", "Self_rated_health_score", "Satisfaction", "Satisfaction_score",
+          "Meaning_of_life", "Happiness", "Happiness_score", "Incontinence", "Hospital", "Hospital_day", 
+          "Hospital_score", "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
+          "Drug_use", "Drug_use_score", "risk_score", "risk_level", "digital", "Centre", "NGO")
 
 # replace outdated full WBS data with latest high-risk WBS data
 wbs <- wbs[wbs$member_id %!in% wbs2$member_id, ] # keep members not found in latest high-risk WBS data
@@ -201,18 +214,21 @@ wbs <- wbs[order(wbs$wbs_survey_date),] # order by WBS survey date
 wbs <- distinct(wbs, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
 
 df$member_id <- toupper(df$member_id)
-df <- merge(df, wbs2[, vars], # extract item matched by member ID
+df <- merge(df, wbs2[, c("member_id", vars)], # extract item matched by member ID
             by=c("member_id"), all.x = TRUE)
 
-# replace the few missing DOB from outdated full WBS data
-temp <- data.frame(member_id = wbs$member_id[wbs$member_id %in% df$member_id[is.na(df$dob) & df$member_id %in% wbs$member_id]], 
-                   dob = wbs$dob[wbs$member_id %in% df$member_id[is.na(df$dob) & df$member_id %in% wbs$member_id]])
-df <- merge(df, temp, # extract item matched by member ID
-            by=c("member_id"), all = TRUE)
-df$dob <- if_else(is.na(df$dob.x), df$dob.y, df$dob.x)
-df$dob.x <- NULL
-df$dob.y <- NULL
-rm(temp)
+# replace the few missing values from outdated full WBS data (dob, gender, etc)
+for (var in vars){
+  temp <- data.frame(member_id = wbs$member_id[wbs$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs$member_id]], 
+                     x = wbs[[var]][wbs$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs$member_id]])
+  names(temp)[names(temp)=="x"] <- var
+  df <- merge(df, temp, # extract item matched by member ID
+              by=c("member_id"), all = TRUE)
+  df[[var]] <- if_else(is.na(df[[paste0(var, ".x")]]), df[[paste0(var, ".y")]], df[[paste0(var, ".x")]])
+  df[[paste0(var, ".x")]] <- NULL
+  df[[paste0(var, ".y")]] <- NULL
+  rm(temp)
+}
 
 df$age <- floor(interval(df$dob, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
 
@@ -220,6 +236,8 @@ df$age_group <- recode_age(df$age, age_labels = c("60-69", "70-79", "80+"))
 df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 
 df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
+
+# wbs2$risk_score <- wbs2$Age_score + wbs2$Heart_score + wbs2$Income_cssa_score + wbs2$FS_score + wbs2$AMIC_score + wbs2$Self_rated_health_score + wbs2$Satisfaction_score + wbs2$Happiness_score + wbs2$Hospital_score + wbs2$Drug_use_score
 
 # save data ----
 setwd(sprintf("~%s/ehealth", setpath))
