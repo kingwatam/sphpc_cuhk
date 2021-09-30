@@ -527,6 +527,8 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     row_count <- row_count + 1
   }
   
+  print(paste(dep_var))
+  
   for (var in row.names(summary(fit)$coef)){
     
     if (!(var %in% unlist(table[1]))){
@@ -541,8 +543,6 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     } else {
       row_count <- match(var, unlist(table[1]))
     }
-    
-    print(paste(dep_var, var))
     
     colnames(table)[col_count] <- dep_var
     
