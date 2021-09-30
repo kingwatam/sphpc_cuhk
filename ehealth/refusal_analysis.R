@@ -107,6 +107,8 @@ df <- readRDS("refusal_data.rds")
 # get REDCap data
 setwd(sprintf("~%s/ehealth", setpath))
 temp <- readRDS("ehealth_data.rds") 
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-06-25'),]
+
 df$type <- ifelse(df$member_id %in% unique(temp$member_id), "completed",  df$type)
 df$type <- ifelse(is.na(df$type), "not completed", df$type)
 
