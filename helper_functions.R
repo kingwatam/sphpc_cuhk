@@ -456,7 +456,7 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
 
-gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3){ 
+gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3, lm_robust = FALSE){ 
   require(lmerTest)
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
   row_count <- 1
@@ -546,15 +546,20 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     
     colnames(table)[col_count] <- dep_var
     
-    beta <- iferror(summary(fit)$coef[var, 1], NA)
+    beta <- iferror(summary(fit, robust = lm_robust)$coef[var, 1], NA)
     if (class(fit)[1] %in% "coxph"){
       se <-  iferror(summary(fit)$coef[var, 3], NA)
     } else {
-      se <-  iferror(summary(fit)$coef[var, 2], NA)
+      se <-  iferror(summary(fit, robust = lm_robust)$coef[var, 2], NA)
     }
     
-    if (show_CI){
     alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
+    if (show_CI & lm_robust & class(fit)[1] %in% "lm"){
+      lowerCI <- iferror(beta + qt(p=alpha/2, df=fit$df.residual) * se, NA)
+      
+      upperCI <- iferror(beta + qt(p=1-(alpha/2), df=fit$df.residual) * se, NA)
+    }
+    else if (show_CI){
     lowerCI <- iferror(confint(fit, var, level=(1-alpha))[1],  # this is slower than qnorm
                        iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
                        )
@@ -562,13 +567,13 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     upperCI <- iferror(confint(fit, var, level=(1-alpha))[2], 
                        iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
                        )
-    }
+    } 
     
     if (class(fit)[1] %in% "gee"){
       robust_z <- summary(fit)$coef[var, ncol(summary(fit)$coef)]
       p_value <- iferror(2 * pnorm(abs(robust_z), lower.tail = FALSE), NA)
     } else {
-      p_value <- iferror(summary(fit)$coef[var, ncol(summary(fit)$coef)], NA)
+      p_value <- iferror(summary(fit, robust = lm_robust)$coef[var, ncol(summary(fit)$coef)], NA)
     }
     
     # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
@@ -592,18 +597,18 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
   return(table)
 }
 
-combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3){
+combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3, lm_robust = FALSE){
   dep_var_saved <- dep_var
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
-      table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
       next
     }
     if (is.null(dep_var_saved)){
-      new_table <- gen_reg(list(...)[[i]], dep_var = NULL, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      new_table <- gen_reg(list(...)[[i]], dep_var = NULL, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
       dep_var <- names(new_table)[2]
     } else {
-      new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places) 
+      new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
     }
     dep_vars <- names(table)
     names(table) <- c("X1",rep(2:ncol(table)))
