@@ -107,7 +107,7 @@ df <- readRDS("refusal_data.rds")
 # get REDCap data
 setwd(sprintf("~%s/ehealth", setpath))
 temp <- readRDS("ehealth_data.rds") 
-temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-06-25'),]
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-06-24'),]
 
 df$type <- ifelse(df$member_id %in% unique(temp$member_id), "completed",  df$type)
 df$type <- ifelse(is.na(df$type), "not completed", df$type)
@@ -119,7 +119,7 @@ df$Age <- ifelse(df$Age<=50, NA, df$Age) # n=2 where age is wrong (age of 0 & 25
 df$age_group <- recode_age(df$Age, age_labels = NULL, second_group = 50, interval = 10, last_group = 80)
 df <- droplevels(df) # drop empty categories in variables
 vars <- df %>% 
-  select(Hypertension, Diabetes, Cholesterol, Heart, Stroke, Copd, Renal, Disease_other, FS_total, SAR_total, 
+  dplyr::select(Hypertension, Diabetes, Cholesterol, Heart, Stroke, Copd, Renal, Disease_other, FS_total, SAR_total, 
          Memory, Self_rated_health, Satisfaction, Meaning_of_life, Happiness, Overall_score,
          Marital_status, Education, Living_status, Housing_type, 
          Incontinence, Hospital, Hospital_day, Aeservices, SOPD, GOPD, Clinic, Elderly_centre, Drug_use) %>% names()
