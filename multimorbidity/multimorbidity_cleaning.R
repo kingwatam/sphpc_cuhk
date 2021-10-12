@@ -101,6 +101,19 @@ df$isitf1 <- car::recode(df$isif1, "
 df$genderf0 <- ifelse(df$genderf0 == 1, "M", "F")
 
 df$srsf1 <- ifelse(df$srsf1 == 0, 1, df$srsf1) # likely miscoding, range = 1:3
+df$hgs4f0 <- ifelse(df$hgs4f0 == 141, 14.1, df$hgs4f0) # value 141 is likely 14.1
+
+df$mocaf0_ <- (df$moca1f0 + df$moca2f0 + df$moca4af0 + df$moca4bf0 + df$moca4cf0 + df$moca5af0 + df$moca5bf0 + df$moca6f0 + df$moca7f0 + df$moca8f0)
+df$mocaf0_ <- ifelse(df$mocaf0_ == 0, NA, df$mocaf0_)
+df$mocaf0_ <- ifelse(df$edu1f0 == 1 & df$mocaf0_ %!in% NA, df$mocaf0_ + 1, df$mocaf0_)
+df$mocaf0 <- ifelse(df$mocaf0_ %in% NA & df$mocaf0 %!in% c(0, NA), df$mocaf0, df$mocaf0_)
+df$mocaf0_ <- NULL
+
+df$mocaf1_ <- (df$moca1f1 + df$moca2f1 + df$moca4af1 + df$moca4bf1 + df$moca4cf1 + df$moca5af1 + df$moca5bf1 + df$moca6f1 + df$moca7f1 + df$moca8f1)
+df$mocaf1_ <- ifelse(df$mocaf1_ == 0, NA, df$mocaf1_)
+df$mocaf1_ <- ifelse(df$edu1f1 == 1 & df$mocaf1_ %!in% NA, df$mocaf1_ + 1, df$mocaf1_)
+df$mocaf1 <- ifelse(df$mocaf1_ %in% NA & df$mocaf1 %!in% c(0, 1, NA), df$mocaf1, df$mocaf1_) # treat zeros (before adding 1) as NAs
+df$mocaf1_ <- NULL
 
 scoring_t0t1 <- function(df){
   df %>% dplyr::select(starts_with("ls") & ends_with("f0")) %>% colnames(.) -> q_ls_f0
@@ -549,7 +562,10 @@ categorize <- function(df){
   
   df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
   df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
-  df$hgs <- pmax(df$hgs_l, df$hgs_r) # average hand-grip strength
+  df$hgs_l <- ifelse(df$hgs_l == 0, NA, df$hgs_l) # set to NA if zero
+  df$hgs_r <- ifelse(df$hgs_r == 0, NA, df$hgs_r)# set to NA if zero
+  df$hgs <- ifelse(df$hgs_l %in% NA, df$hgs_r, 
+                   ifelse(df$hgs_r %in% NA, df$hgs_l, (df$hgs_l + df$hgs_r)/2)) # average hand-grip strength
   # df$gender <- to_factor(df$gender)
   
   df$hgs_ <- ifelse(is.na(df$hgs) | is.na(df$gender), NA, 

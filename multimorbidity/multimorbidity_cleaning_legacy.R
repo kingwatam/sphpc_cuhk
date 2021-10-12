@@ -526,7 +526,8 @@ df <- reshape(as.data.frame(df[, c("gender", "chronic_diseasef0", "cohort", "edu
 
 df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
 df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
-df$hgs <- pmax(df$hgs_l, df$hgs_r) # average hand-grip strength
+df$hgs <- ifelse(df$hgs_l %in% NA, df$hgs_r, 
+                 ifelse(df$hgs_r %in% NA, df$hgs_l, (df$hgs_l + df$hgs_r)/2)) # average hand-grip strength
 df$gender <- to_factor(df$gender)
 df$sar_hgs <- ifelse(is.na(df$hgs) | is.na(df$gender) | is.na(df$sarc_f), NA, 
                      ifelse(df$hgs < 28 & df$gender == "Male" & df$sarc_f >= 4 , 1, 
