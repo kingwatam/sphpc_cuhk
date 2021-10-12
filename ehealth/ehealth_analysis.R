@@ -29,11 +29,41 @@ df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 df$pase_c_11_1 <- ifelse(df$pase_c_11 == 0 , 0, df$pase_c_11_1)
 df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
 
-# df$yearmonth <- zoo::as.yearmon(df$ehealth_eval_timestamp)
-# df$yearmonth <- match(df$yearmonth, unique(df$yearmonth)[order(unique(df$yearmonth))])
+df$yearmonth <- zoo::as.yearmon(df$ehealth_eval_timestamp)
+df$yearmonth <- match(df$yearmonth, unique(df$yearmonth)[order(unique(df$yearmonth))])
+df$yearmonth2 <- floor((df$yearmonth+2)/3) # every 3 months
 # df$surveydate <- as.Date(df$ehealth_eval_timestamp)
 # df$surveydate <- match(df$surveydate, unique(df$surveydate)[order(unique(df$surveydate))]) # this skips some empty days
-df$surveydate <- as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03') # days since first recorded survey date
+# df$surveydays <- as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03') # days since first recorded survey date
+# df$surveyquarters <- round((as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03'))/60, 0) # quarters since first recorded survey date
+
+# nursing data ----
+temp <- xlsx::read.xlsx2("No. of nurse session_As of 20210831.xlsx", sheetIndex  = 1
+                         , header = TRUE
+)
+temp <- convert2NA(temp, "")
+names(temp)[names(temp) == "UID"] <- "member_id"
+names(temp)[names(temp) == "Start.date"] <- "nursing_start_date"
+names(temp)[names(temp) == "Status"] <- "status"
+names(temp)[names(temp) == "No..of.Face.to.face.Session"] <- "f2f_num"
+names(temp)[names(temp) == "No..of.Tele.mode.Session"] <- "telemode_num"
+names(temp)[names(temp) == "Total"] <- "f2f_telemode_num"
+temp$nursing_start_date <- as.Date(as.numeric(temp$nursing_start_date), origin = "1899-12-30")
+
+temp$status <- ifelse(temp$status == "退出", 1, 0)
+df <- merge(df, temp, # extract item matched by member ID
+            by=c("member_id"), all.x = TRUE)
+
+df$f2f_num <- as.numeric(df$f2f_num)
+df$f2f_num <- ifelse(df$f2f_num %in% NA, 0, df$f2f_num)
+
+df$telemode_num <- as.numeric(df$telemode_num)
+df$telemode_num <- ifelse(df$telemode_num %in% NA, 0, df$telemode_num)
+
+df$f2f_telemode_num <- as.numeric(df$f2f_telemode_num)
+df$f2f_telemode_num <- df$f2f_num + df$telemode_num # seems some values in original total were miscalculated
+df$f2f_pct <- df$f2f_num/df$f2f_telemode_num
+df$telemode_pct <- df$telemode_num/df$f2f_telemode_num
 
 # total score of diet items ----
 scoring <- function(df){
@@ -51,7 +81,6 @@ scoring <- function(df){
 }
 
 df <- cbind(df, scoring(df))
-         
 
 # set variable names ----
 var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=better)"),  
@@ -359,7 +388,7 @@ ordinalVars <- c("amic",
 
 medianVars <- c("use_health_service_8")
 
-gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = "time"){ 
+gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = "time", id = "member_id", to_English = FALSE){ 
   table <- data.frame(matrix(ncol = 7,  nrow = 0))
   row_count <- 1
   col_bl <- 3
@@ -368,21 +397,26 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   col_dif <- 6 # difference
   col_pval <- 7 # p-value
   
-  pre <- unique(df$time)[1]
-  post <- unique(df$time)[2]
+  pre <- unique(df[[group]])[1]
+  post <- unique(df[[group]])[2]
   
-  df2 <- df %>% add_count(member_id, name = "n") %>% filter(n == 2) # keep only those with both T0 & T1
+  df2 <- df %>% add_count(get(id), name = "n") %>% filter(n == 2) # keep only those with both T0 & T1
   
-  dfwide <- reshape(data=df, idvar= c("member_id"),
+  dfwide <- reshape(data=df, idvar= c(id),
                      timevar = group,
                      direction="wide")
   
-  dfwide2 <- reshape(data=df2, idvar= c("member_id"),
+  dfwide2 <- reshape(data=df2, idvar= c(id),
                      timevar = group,
                      direction="wide")
   
-  df_en <- to_English(to_character_df(df, ordinalVars))
-  df2_en <- to_English(to_character_df(df2, ordinalVars))
+  if (to_English){
+    df_en <- to_English(to_character_df(df, ordinalVars))
+    df2_en <- to_English(to_character_df(df2, ordinalVars))
+  } else {
+    df_en <- df
+    df2_en <- df2
+  }
   
   colnames(table)[1] <- ""
   colnames(table)[2] <- ""
@@ -415,6 +449,7 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   }
   
   for (var in vars){
+    print(var)
     if (var %in% ordinalVars){
       table[row_count, 1] <- var
       
@@ -507,10 +542,11 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
 }
 
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(df[df$time %in% c(0,2), ], vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
+gen_table(df[df$time %in% c(0,1) & df$gender == "F" & df$age_group == "80+", ], to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
-temp <- df %>% add_count(member_id, name = "n") %>% filter(time %in% c(0, 1) & n == 2)
+# pre-post results with adjustments ----
+temp <- df %>% filter(time %in% c(0, 1))  %>% add_count(member_id, name = "n") %>% filter(n == 2)
 table <- combine_tables(NULL,
                         exponentiate = FALSE,
                         # show_CI = 0.83,
@@ -559,68 +595,65 @@ table <- combine_tables(NULL,
 )
 table %>% clipr::write_clip()
 
-
-# pre-post results with adjustments ----
 table <- combine_tables(NULL,
                         exponentiate = FALSE,
                         # show_CI = 0.83,
-                        lmer(use_health_service_8~ 1+gender*time+age_group*time+time+(1| member_id) , REML = TRUE, data = temp),
-                        lmer(amic~ 1+gender*time+age_group*time+time+(1| member_id) , REML = TRUE, data = temp),
-                        # glmer(amic~ 1+gender*time+age_group*time+time+ (1| member_id), family = binomial, data = temp),
-                        lmer(amic_sum~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(amic~ 1+gender+age_group+time+f2f_telemode_num*time+(1| member_id) , REML = TRUE, data = temp),
+                        # glmer(amic~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id), family = binomial, data = temp),
+                        lmer(amic_sum~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
                         # clmm(as.factor(amic_sum) ~ covid+int + (1 | member_id), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-                        lmer(self_efficacy~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_2~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_3~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_4~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_5~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy_2~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy_3~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy_4~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(self_efficacy_5~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
                         
-                        lmer(eq5d~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_mobility~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_self_care~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_usual_activity~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_pain_discomfort~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_anxiety_depression~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_health~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_mobility~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_self_care~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_usual_activity~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_pain_discomfort~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_anxiety_depression~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(eq5d_health~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
                         
-                        lmer(satisfaction_1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(satisfaction_2~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(satisfaction_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(satisfaction_2~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
                         
-                        lmer(pase_c~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1_2~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_11~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_11~ 1+gender*time+age_group*time+time+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_11_1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_12_1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_12_1~ 1+gender*time+age_group*time+time+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_12~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(pase_c~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(pase_c_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(pase_c_1_2~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(pase_c_11~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        # glmer(pase_c_11~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id), family = binomial, data = temp),
+                        lmer(pase_c_11_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(pase_c_12_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        # glmer(pase_c_12_1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id), family = binomial, data = temp),
+                        lmer(pase_c_12~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
                         
-                        lmer(matrix_diet_dh3~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh4~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh7~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh8~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp1~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp3~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp4~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp5~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_sum~ 1+gender*time+age_group*time+time+ (1| member_id) , REML = TRUE, data = temp)
-)
+                        lmer(matrix_diet_dh3~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(matrix_diet_dh4~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(matrix_diet_dh7~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(matrix_diet_dh8~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(diet_dp1~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(diet_dp3~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(diet_dp4~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(diet_dp5~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(diet_sum~ 1+gender+age_group+time+f2f_telemode_num*time+ (1| member_id) , REML = TRUE, data = temp),
+                        lmer(use_health_service_8~ 1+gender+age_group+time+f2f_telemode_num*time+(1| member_id) , REML = TRUE, data = temp)
+                        )
 table %>% clipr::write_clip()
-
 
 # sub-group analysis ----
 df_temp <- df[df$time %in% c(0,1),] %>% add_count(member_id) %>% filter(n == 2)
 
 table <- combine_tables(NULL, decimal_places = 2,
-                       lmer(amic~ 1+time+gender+age_group+risk_score+ (1| member_id) , REML = TRUE, data = df_temp)
+                       lmer(amic~ 1+time+gender*time+age_group*time+ (1| member_id) , REML = TRUE, data = df_temp)
                        
 )
 for (var in allVars){
   temp <- combine_tables(NULL, decimal_places = 2,
                          dep_var = paste0(var),
-                         lmer(get(var)~ 1+time+gender+age_group+risk_score+ (1| member_id) , REML = TRUE, data = df_temp)
+                         lmer(get(var)~ 1+time+gender*time+age_group*time+ (1| member_id) , REML = TRUE, data = df_temp)
                          
   )
   colnames <- c(names(table), names(temp)[2:ncol(temp)])
@@ -629,7 +662,7 @@ for (var in allVars){
   # rm(temp)
 }
 
-
+# getting significance for differences 
 df_temp$age_group <- car::recode(df_temp$age_group, "
 '60-69' = '60';
 '70-79' = '70';
@@ -648,15 +681,15 @@ for (var in allVars){
   
   table[1, col_count] <- var
   
-  model <- lmer(get(var)~ 1+time+gender*time+age_group*time+risk_score*time+ (1| member_id) , REML = TRUE, data = df_temp)
+  model <- lmer(get(var)~ 1+time+gender*time+age_group*time+gender*age_group+ (1| member_id) , REML = TRUE, data = df_temp)
   
   f_60 <- starred_p(summary(glht(model, linfct = "time == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time == 0"))$test$coefficients[[1]])
   f_70 <- starred_p(summary(glht(model, linfct = "time + time:age_group70 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:age_group70 == 0"))$test$coefficients[[1]])
   f_80 <- starred_p(summary(glht(model, linfct = "time + time:age_group80 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:age_group80 == 0"))$test$coefficients[[1]])
   
   m_60 <- starred_p(summary(glht(model, linfct = "time + time:genderM == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:genderM == 0"))$test$coefficients[[1]])
-  m_70 <- starred_p(summary(glht(model, linfct = "time + time:genderM + time:age_group70 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:genderM + time:age_group70 == 0"))$test$coefficients[[1]])
-  m_80 <- starred_p(summary(glht(model, linfct = "time + time:genderM + time:age_group80 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:genderM + time:age_group80 == 0"))$test$coefficients[[1]])
+  m_70 <- starred_p(summary(glht(model, linfct = "time + time:genderM + time:age_group70 + genderM:age_group70 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:genderM + time:age_group70 == 0"))$test$coefficients[[1]])
+  m_80 <- starred_p(summary(glht(model, linfct = "time + time:genderM + time:age_group80 + genderM:age_group80 == 0"))$test$pvalues[[1]], 3, summary(glht(model, linfct = "time + time:genderM + time:age_group80 == 0"))$test$coefficients[[1]])
   
   table[2, col_count] <- m_60
   table[3, col_count] <- m_70
@@ -785,7 +818,7 @@ rm(temp1, temp2)
 # set.seed(463621)
 # selected_id <- unique(sample(temp$member_id[temp$time == 1], size = 500))
 # temp <- temp[temp$time == 0 |
-#                (temp$time == 1 & temp$member_id %in% selected_id), ] 
+#                (temp$time == 1 & temp$member_id %in% selected_id), ]
 
 # temp <- df[as.Date(df$ehealth_eval_timestamp) >= as.Date('2021-03-28')
 #            # & as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-05-15')
@@ -835,30 +868,39 @@ temp$educ <- to_factor(temp$educ)
 temp$living_status <- to_factor(temp$living_status)
 temp$housing_type <- to_factor(temp$housing_type)
 temp$gender <- as.factor(temp$gender)
+temp$Drug_use <- as.factor(temp$Drug_use)
 # matched.out <- matchit(time ~ gender + age + marital + educ + living_status + housing_type + risk_score,
 #                  data = temp, method = "optimal"
 #                  # , distance='mahalanobis'
 #                  )
-matched.out <- matchit(time ~ gender + age + 
-                         # housing_type +
-                         surveydate +
-                         risk_score,
+# temp$n <- NULL
+# temp_ <- temp %>% add_count(member_id) %>% filter((n == 1 & time == 0) | (n == 2 & time == 1)) # remove pre-test of those with both pre & post
+matched.out <- matchit(time ~ gender + 
+                         age +
+                       #   housing_type +
+                       #   marital + educ + living_status +
+                         yearmonth +
+                       #   FS_total + SAR_total
+                       # + Hospital + Aeservices + Drug_use
+                         risk_score
+                       ,
                  data = temp, method = "optimal"
                  # , caliper = 0.25
                  # , distance='mahalanobis'
                  )
-
+plot(summary(matched.out)
+     , xlim=c(0,1)
+)
 # temp$time <- (temp$time-1)*-1
 
 temp_matched <- match.data(matched.out, data = temp) 
 temp_matched$member_id_old <- temp_matched$member_id
 temp_matched$member_id <- temp_matched$subclass
+
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(temp_matched, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE) %>% clipr::write_clip()
+gen_table(temp_matched, to_English = TRUE, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
-# plot(summary(matched.out)
-#      , xlim=c(0,0.25)
-#      )
+
 library(cobalt)
 v <- data.frame(old = c("distance", "gender_M", "age", 
                         "housing_type_Public Housing", "housing_type_Subsidized Housing", "housing_type_Private Housing", 
@@ -915,7 +957,7 @@ love.plot(matched.out, thresholds = c(m = .1), colors = c("grey", "black"), star
 # temp_matched <- match.data(matched.out, data= temp)
 # temp_matched$member_id <- temp_matched$subclass
 # Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-# gen_table(temp_matched, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE, group = "int_t0") %>% clipr::write_clip()
+# gen_table(temp_matched, to_English = TRUE, allVars[], ordinalVars = NULL, medianVars, paired =  TRUE, group = "int_t0") %>% clipr::write_clip()
 # Sys.setlocale(locale =  "eng")
 # # plot(summary(matched.out)
 # #      , xlim=c(0,0.25)
