@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-09-27_1138.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-10-05_1047.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 # df$member_id[df$record_id == 3747] <- "YWC01M332"
@@ -27,7 +27,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20210927_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20211004_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -113,37 +113,22 @@ val_labels(df$pase_c_12_1) <- c(Yes=1, No=0)
 
 # import WBS data ----
 setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
-wbs <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+wbs0 <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs2 <- xlsx::read.xlsx2("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-09-04.xlsx", sheetName  = "Raw data"
+wbs <- openxlsx::read.xlsx("EHealth_NEW_DATA_WBS_Complete_IOA_2021-09-15.xlsx", sheet  = "Raw data"
+) # latest WBS all data
+wbs$Survey_date <- as.Date(as.numeric(wbs$Survey_date), origin = "1899-12-30")
+wbs$All_forms_completed_date <- as.Date(as.numeric(wbs$All_forms_completed_date), origin = "1899-12-30")
+wbs$Birth_date <- as.Date(as.numeric(wbs$Birth_date), origin = "1899-12-30")
+
+wbs2 <- openxlsx::read.xlsx("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-09-04.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(as.numeric(wbs2$Survey_date), origin = "1899-12-30")
 wbs2$All_forms_completed_date <- as.Date(as.numeric(wbs2$All_forms_completed_date), origin = "1899-12-30")
 wbs2$Birth_date <- as.Date(as.numeric(wbs2$Birth_date), origin = "1899-12-30")
 
-# names(wbs2)[names(wbs2)=="Memory"] <- "AMIC"
-# names(wbs2)[names(wbs2)=="Memory_score"] <- "AMIC_score"
-# 
-# vars <- c("Uid", "Gender", "Birth_date", "Survey_date",
-#           "Marital_status", "Education", "Overall_score", "Risk_level")
-# 
-# wbs2[,c("Marital_status", "Education")] <-
-#   lapply(wbs2[, c("Marital_status", "Education")],type.convert,as.is=TRUE)
-# 
-# val_labels(wbs2$Gender) <- val_labels(wbs$Gender)
-# val_labels(wbs2$Marital_status) <- val_labels(wbs$Marital_status)
-# val_labels(wbs2$Education) <- val_labels(wbs$Education)
-# 
-# wbs2$Risk_level <- car::recode(wbs2$Risk_level, "
-# 'L' = 1; 
-# 'M' = 2;
-# 'H' = 3
-# ")
-# val_labels(wbs2$Risk_level) <- c("L" = 1, "M" = 2, "H" = 3)
-# wbs2$Birth_date <- as.Date(as.numeric(wbs2$Birth_date), origin = "1899-12-30")
-
-for (i in c("wbs"
+for (i in c("wbs0", "wbs"
             , "wbs2"
             )){ # change variable names for both dfs
   df.tmp <- get(i)
@@ -181,10 +166,12 @@ vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
           "Drug_use", "Drug_use_score", "risk_score", "risk_level", "digital", "Centre", "NGO")
 
 # replace outdated full WBS data with latest high-risk WBS data
-wbs <- wbs[wbs$member_id %!in% wbs2$member_id, ] # keep members not found in latest high-risk WBS data
-wbs$All_forms_completed_date <- NA
+wbs0 <- wbs0[wbs0$member_id %!in% wbs2$member_id, ] # keep members not found in latest high-risk WBS data
+wbs0$All_forms_completed_date <- NA
 names(wbs2)[names(wbs2)=="Memory"] <- "AMIC"
 names(wbs2)[names(wbs2)=="Memory_score"] <- "AMIC_score"
+names(wbs)[names(wbs)=="Memory"] <- "AMIC"
+names(wbs)[names(wbs)=="Memory_score"] <- "AMIC_score"
 
 wbs2$risk_level <- car::recode(wbs2$risk_level, "
 'L' = 1;
@@ -192,43 +179,88 @@ wbs2$risk_level <- car::recode(wbs2$risk_level, "
 'H' = 3
 ")
 
-# copy labels from WBS to WBS2
+wbs$risk_level <- car::recode(wbs$risk_level, "
+'L' = 1;
+'M' = 2;
+'H' = 3
+")
+
+# copy labels from WBS to WBS2 & wbs
 for (var in names(wbs2)){
-  if (class(wbs[[var]])[1] == "haven_labelled" &
+  if (class(wbs0[[var]])[1] == "haven_labelled" &
       var %!in% c("SAR_total")){
-    if (typeof(wbs[[var]])[1] == "double"){
-      wbs2[[var]] <- labelled(as.numeric(wbs2[[var]]), val_labels(wbs[[var]]))
-    } else if (typeof(wbs[[var]])[1] == "character"){
-      wbs2[[var]] <- labelled(wbs2[[var]], val_labels(wbs[[var]]))
+    if (typeof(wbs0[[var]])[1] == "double"){
+      wbs2[[var]] <- labelled(as.numeric(wbs2[[var]]), val_labels(wbs0[[var]]))
+      wbs[[var]] <- labelled(as.numeric(wbs[[var]]), val_labels(wbs0[[var]]))
+    } else if (typeof(wbs0[[var]])[1] == "character"){
+      wbs2[[var]] <- labelled(wbs2[[var]], val_labels(wbs0[[var]]))
+      wbs[[var]] <- labelled(wbs[[var]], val_labels(wbs0[[var]]))
     }
-  } else if (class(wbs[[var]])[1] == "numeric" |
+  } else if (class(wbs0[[var]])[1] == "numeric" |
              var %in% c("SAR_total")){
     wbs2[[var]] <- as.numeric(wbs2[[var]])
+    wbs[[var]] <- as.numeric(wbs[[var]])
   } 
 }
 
-wbs2 <- wbs2[order(wbs2$wbs_survey_date),] # order by WBS survey date
-wbs2 <- distinct(wbs2, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
+# wbs2 <- wbs2[order(wbs2$wbs_survey_date),] # order by WBS survey date
+# wbs2 <- distinct(wbs2, member_id, .keep_all = TRUE) # keep only first instance (i.e. remove any repeats)
 
-wbs <- wbs[order(wbs$wbs_survey_date),] # order by WBS survey date
-wbs <- distinct(wbs, member_id, .keep_all = TRUE) # keep only first instance of same student & T1 (i.e. remove any repeats)
+# recode WBS rounds
+wbs <- wbs[order(wbs$member_id, wbs$wbs_survey_date),] # order by WBS survey date
+wbs <- wbs %>% group_by(member_id) %>% mutate(id_row = row_number()) # %>% add_count(member_id, Round) %>% filter(n==2) %>% dplyr::select(wbs_survey_date, member_id, Round, id_row) %>% View()
+wbs$Round <- ifelse(wbs$id_row != wbs$Round, wbs$id_row, wbs$Round)
+wbs <- wbs[wbs$id_row != 3, ]
+wbs <- distinct(wbs, member_id, Round, .keep_all = TRUE) # keep only first instance 
+
+wbs <- as.data.frame(wbs)
+wbs <- convert2NA(wbs, "")
+
+Sys.setlocale(locale =  "cht") 
+wbs$Hospital_day <- car::recode(wbs$Hospital_day, "
+c('一次', '半日', 'l') = 1;
+'2次' = 2;
+'三次' = 3;
+'6日' = 6
+")
+wbs$Aeservices_day  <- car::recode(wbs$Aeservices_day, "
+c('一', '一次', '一次。', '〉1', '跌傷', '1次 耳水不平衡', '1次', '1係', 'I', 'l', 'I ') = 1;
+'1-2' = 1.5;
+'2次' = 2;
+'2-3' = 2.5;
+'3次' = 3;
+c('3-4次', '3-4') = 3.5;
+'4次' = 4;
+'超過4次' = 5;
+'5-6' = 5.5;
+c(' 6', '64') = 6;
+'8～10' = 9
+")
+Sys.setlocale(locale =  "eng") 
+wbs$Hospital_day <- as.numeric(wbs$Hospital_day)
+wbs$Hospital_day <- ifelse(wbs$Hospital_day %in% NA, 0, wbs$Hospital_day)
+wbs$Hospital <- ifelse(wbs$Hospital_day == 0, 0, wbs$Hospital)
+
+wbs$Aeservices_day <- as.numeric(wbs$Aeservices_day)
+wbs$Aeservices_day <- ifelse(wbs$Aeservices_day %in% NA, 0, wbs$Aeservices_day)
+wbs$Aeservices <- ifelse(wbs$Aeservices_day == 0, 0, wbs$Aeservices)
 
 df$member_id <- toupper(df$member_id)
-df <- merge(df, wbs2[, c("member_id", vars)], # extract item matched by member ID
+df <- merge(df, wbs[wbs$Round == 1, c("member_id", vars)], # extract item matched by member ID
             by=c("member_id"), all.x = TRUE)
 
-# replace the few missing values from outdated full WBS data (dob, gender, etc)
-for (var in vars){
-  temp <- data.frame(member_id = wbs$member_id[wbs$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs$member_id]], 
-                     x = wbs[[var]][wbs$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs$member_id]])
-  names(temp)[names(temp)=="x"] <- var
-  df <- merge(df, temp, # extract item matched by member ID
-              by=c("member_id"), all = TRUE)
-  df[[var]] <- if_else(is.na(df[[paste0(var, ".x")]]), df[[paste0(var, ".y")]], df[[paste0(var, ".x")]])
-  df[[paste0(var, ".x")]] <- NULL
-  df[[paste0(var, ".y")]] <- NULL
-  rm(temp)
-}
+# # replace the few missing values from latest wbs data (dob, gender, etc)
+# for (var in vars){
+#   temp <- data.frame(member_id = wbs2$member_id[wbs2$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs2$member_id]],
+#                      x = wbs2[[var]][wbs2$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs2$member_id]])
+#   names(temp)[names(temp)=="x"] <- var
+#   df <- merge(df, temp, # extract item matched by member ID
+#               by=c("member_id"), all = TRUE)
+#   df[[var]] <- if_else(is.na(df[[paste0(var, ".x")]]), df[[paste0(var, ".y")]], df[[paste0(var, ".x")]])
+#   df[[paste0(var, ".x")]] <- NULL
+#   df[[paste0(var, ".y")]] <- NULL
+#   rm(temp)
+# }
 
 df$age <- floor(interval(df$dob, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
 
