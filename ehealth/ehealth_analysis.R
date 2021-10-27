@@ -37,7 +37,7 @@ df$yearmonth2 <- floor((df$yearmonth+2)/3) # every 3 months
 # df$surveydays <- as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03') # days since first recorded survey date
 # df$surveyquarters <- round((as.Date(df$ehealth_eval_timestamp) - as.Date('2020-08-03'))/60, 0) # quarters since first recorded survey date
 
-# nursing data ----
+# nursing mode & freq data ----
 temp <- xlsx::read.xlsx2("No. of nurse session_As of 20210831.xlsx", sheetIndex  = 1
                          , header = TRUE
 )
@@ -64,6 +64,64 @@ df$f2f_telemode_num <- as.numeric(df$f2f_telemode_num)
 df$f2f_telemode_num <- df$f2f_num + df$telemode_num # seems some values in original total were miscalculated
 df$f2f_pct <- df$f2f_num/df$f2f_telemode_num
 df$telemode_pct <- df$telemode_num/df$f2f_telemode_num
+
+# nursing assessment data ----
+temp <- readxl::read_xlsx("Assessment_To CUHK_20211005_king.xlsx", sheet  = "20211005_"
+                         , col_names = TRUE, guess_max = 3000)
+temp <- temp[order(temp$`Assessed Date`, decreasing = TRUE),] # order by nursing assessment date in reverse
+temp <- distinct(temp, UID, .keep_all = TRUE) # keep only latest instance (i.e. remove any repeats)
+
+temp$ex_smoker <- ifelse(temp$smoke %in% "No(ex-smoker)", 1, 0)
+temp$smoke <- ifelse(temp$smoke %in% "No(ex-smoker)", 0, temp$smoke)
+temp$smoke <- as.numeric(temp$smoke)
+temp$ex_drinker <- ifelse(temp$drink %in% "No (ex-drinker)", 1, 0)
+temp$drink <- ifelse(temp$drink %in% "No (ex-drinker)", 0, temp$drink)
+temp$drink <- as.numeric(temp$drink)
+temp$either_incontinent <- ifelse(temp$bm_continent == 0 | temp$urinary_continent == 0, 1, 0)
+names(temp)[names(temp)=="UID"] <- "member_id"
+temp <- merge(temp, wbs[wbs$Round == 1, c("member_id", "risk_level", "Carer", "Hypertension", "Diabetes", 
+                                        "Cholesterol", "Heart", "Stroke", "Copd", "Renal", "living_status", 
+                                        "AMIC", "Incontinence", "SAR5")], # extract item matched by member ID
+            by=c("member_id"), all.x = TRUE)
+temp$live_alone_wbs <- ifelse(temp$living_status %in% 1, 1, 
+                              ifelse(temp$living_status %in% NA, NA, 0))
+temp$live_family_wbs <- ifelse(temp$living_status %in% c(2:4), 1,
+                               ifelse(temp$living_status %in% NA, NA, 0))
+temp$live_others_wbs <- ifelse(temp$living_status %in% 5, 1, 
+                               ifelse(temp$living_status %in% NA, NA, 0))
+temp$memory_impaired_wbs <- ifelse(temp$AMIC %in% c(1:2), 1, 
+                               ifelse(temp$AMIC %in% NA, NA, 0))
+temp$memory_impaired_worry_wbs <- ifelse(temp$AMIC %in% 2, 1,
+                                     ifelse(temp$AMIC %in% NA, NA, 0))
+temp$incontinent_wbs <- ifelse(temp$Incontinence %in% c(1:2), 1,
+                           ifelse(temp$Incontinence %in% NA, NA, 0))
+temp$incontinent_occasional_wbs <- ifelse(temp$Incontinence %in% 2, 1,
+                                      ifelse(temp$Incontinence %in% NA, NA, 0))
+
+temp$fall_hist_wbs <- ifelse(temp$SAR5 %in% 0, 0,
+                             ifelse(temp$Incontinence %in% NA, NA, 1)) 
+
+
+# consistency/accuracy between nursing assessment and WBS data
+temp$self_care_inverse <- ((temp$self_care)-1)*-1
+vars1 <- c("ht", "dm", "cva", "ihd", "hyperlipid", "renal", "smoke",
+           "live_alone", "live_family", "live_maid", "self_care_inverse", "fall_hist", "either_incontinent", "either_incontinent")
+vars2 <- c("Hypertension", "Diabetes", "Stroke", "Heart", "Cholesterol", "Renal", "Copd",
+           "live_alone_wbs", "live_family_wbs", "live_others_wbs", "Carer", "fall_hist_wbs", "incontinent_wbs", "incontinent_occasional_wbs")
+
+table <- data.frame(matrix(ncol = 3,  nrow = 0))
+for (i in 1:length(vars1)){
+  var1 <- vars1[i]
+  var2 <- vars2[i]
+  table[i, 1]  <- var1
+  table[i, 2]  <- var2
+  table[i, 3]  <-  nrow(temp[(temp[[var1]] == 1 & temp[[var2]] == 1) |
+                               (temp[[var1]] == 0 & temp[[var2]] == 0),])/nrow(temp[temp[[var1]] %!in% NA & temp[[var2]] %!in% NA,])
+}
+
+
+nrow(temp[(temp[[var1]] == 1 & temp[[var2]] == 1) |
+            (temp[[var1]] == 0 & temp[[var2]] == 0),])/nrow(temp[temp[[var1]] %!in% NA & temp[[var2]] %!in% NA,])
 
 # total score of diet items ----
 scoring <- function(df){
