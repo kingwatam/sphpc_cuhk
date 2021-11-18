@@ -39,6 +39,10 @@
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
 
 '%!in%' <- Negate('%in%')
+'%!IN%' <- Negate('%in%') # capitalise for convenience
+'%IN%' <- Negate(Negate('%in%')) # capitalise for convenience
+
+select <- dplyr::select 
 
 View_ <- function(obj){
   # object_name <- deparse(substitute(object)) 
