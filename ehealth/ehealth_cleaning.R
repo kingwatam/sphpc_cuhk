@@ -12,10 +12,11 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-10-05_1047.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-11-04_1040.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
-# df$member_id[df$record_id == 3747] <- "YWC01M332"
+df$member_id[df$record_id == 5058] <- "CAR10M212"
+df$member_ename[df$record_id == 5058] <- "XU XUE LING"
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -27,7 +28,7 @@ df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-
 # names(df2) <- c(names(df), names(df2)[87:96])
 
 # survey data cleaning ----
-temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary 20211004_duplicates.xlsx", sheetName  = "duplicate record"
+temp <- xlsx::read.xlsx2("Raw Data (from Oct 8) and Summary_duplicates.xlsx", sheetName  = "duplicate record"
                          , encoding = "UTF-8"
                          , header = TRUE
 )
@@ -116,17 +117,18 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs0 <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs <- openxlsx::read.xlsx("EHealth_NEW_DATA_WBS_Complete_IOA_2021-09-15.xlsx", sheet  = "Raw data"
+wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2021-09-15.xlsx", sheet  = "Raw data"
 ) # latest WBS all data
-wbs$Survey_date <- as.Date(as.numeric(wbs$Survey_date), origin = "1899-12-30")
-wbs$All_forms_completed_date <- as.Date(as.numeric(wbs$All_forms_completed_date), origin = "1899-12-30")
-wbs$Birth_date <- as.Date(as.numeric(wbs$Birth_date), origin = "1899-12-30")
+# latest WBS all data
+wbs$Survey_date <- as.Date(wbs$Survey_date)
+wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
+wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- openxlsx::read.xlsx("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-09-04.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-10-23.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
-wbs2$Survey_date <- as.Date(as.numeric(wbs2$Survey_date), origin = "1899-12-30")
-wbs2$All_forms_completed_date <- as.Date(as.numeric(wbs2$All_forms_completed_date), origin = "1899-12-30")
-wbs2$Birth_date <- as.Date(as.numeric(wbs2$Birth_date), origin = "1899-12-30")
+wbs2$Survey_date <- as.Date(wbs2$Survey_date)
+wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
+wbs2$Birth_date <- as.Date(wbs2$Birth_date)
 
 for (i in c("wbs0", "wbs"
             , "wbs2"
