@@ -12,11 +12,9 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-11-04_1040.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-12-01_1033.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
-df$member_id[df$record_id == 5058] <- "CAR10M212"
-df$member_ename[df$record_id == 5058] <- "XU XUE LING"
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -124,7 +122,7 @@ wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-10-23.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-11-20.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
@@ -167,9 +165,6 @@ vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
           "Hospital_score", "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
           "Drug_use", "Drug_use_score", "risk_score", "risk_level", "digital", "Centre", "NGO")
 
-# replace outdated full WBS data with latest high-risk WBS data
-wbs0 <- wbs0[wbs0$member_id %!in% wbs2$member_id, ] # keep members not found in latest high-risk WBS data
-wbs0$All_forms_completed_date <- NA
 names(wbs2)[names(wbs2)=="Memory"] <- "AMIC"
 names(wbs2)[names(wbs2)=="Memory_score"] <- "AMIC_score"
 names(wbs)[names(wbs)=="Memory"] <- "AMIC"
@@ -205,14 +200,21 @@ for (var in names(wbs2)){
   } 
 }
 
-# wbs2 <- wbs2[order(wbs2$wbs_survey_date),] # order by WBS survey date
-# wbs2 <- distinct(wbs2, member_id, .keep_all = TRUE) # keep only first instance (i.e. remove any repeats)
+# replace outdated full WBS data with latest high-risk WBS data
+wbs0 <- wbs0[wbs0$member_id %!in% wbs2$member_id, ] # keep members not found in latest high-risk WBS data
+wbs0$All_forms_completed_date <- NA
+wbs$member_id_round <- paste0(wbs$member_id, "_", wbs$Round)
+wbs2$member_id_round <- paste0(wbs2$member_id, "_", wbs2$Round)
+wbs2 <- wbs2[wbs2$member_id_round %!in% wbs$member_id_round,] # keep latest high-risk members not found in outdated full WBS data
+wbs$member_id_round <- NULL
+wbs2$member_id_round <- NULL
+wbs <- rbind(wbs, wbs2) # combine outdated full wBS with latest high-risk wBS data
 
 # recode WBS rounds
 wbs <- wbs[order(wbs$member_id, wbs$wbs_survey_date),] # order by WBS survey date
 wbs <- wbs %>% group_by(member_id) %>% mutate(id_row = row_number()) # %>% add_count(member_id, Round) %>% filter(n==2) %>% dplyr::select(wbs_survey_date, member_id, Round, id_row) %>% View()
 wbs$Round <- ifelse(wbs$id_row != wbs$Round, wbs$id_row, wbs$Round)
-wbs <- wbs[wbs$id_row != 3, ]
+wbs <- wbs[wbs$id_row <= 2, ]
 wbs <- distinct(wbs, member_id, Round, .keep_all = TRUE) # keep only first instance 
 
 wbs <- as.data.frame(wbs)
@@ -230,7 +232,7 @@ c('一', '一次', '一次。', '〉1', '跌傷', '1次 耳水不平衡', '1次'
 '1-2' = 1.5;
 '2次' = 2;
 '2-3' = 2.5;
-'3次' = 3;
+c('多次', '3次') = 3;
 c('3-4次', '3-4') = 3.5;
 '4次' = 4;
 '超過4次' = 5;
@@ -266,12 +268,18 @@ df <- merge(df, wbs[wbs$Round == 1, c("member_id", vars)], # extract item matche
 
 df$age <- floor(interval(df$dob, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
 
-df$age_group <- recode_age(df$age, age_labels = c("60-69", "70-79", "80+"))
+df$age_group <- recode_age(df$age, age_labels = c("50-59", "60-69", "70-79", "80+"))
 df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 
 df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
 
 # wbs2$risk_score <- wbs2$Age_score + wbs2$Heart_score + wbs2$Income_cssa_score + wbs2$FS_score + wbs2$AMIC_score + wbs2$Self_rated_health_score + wbs2$Satisfaction_score + wbs2$Happiness_score + wbs2$Hospital_score + wbs2$Drug_use_score
+
+# clean up names of interviewers ----
+setwd(sprintf("~%s/ehealth", setpath))
+Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
+source("rename_interviewer.R", encoding="utf-8")
+df$interviewer_name <- rename_interviewer(df$interviewer_name)
 
 # save data ----
 setwd(sprintf("~%s/ehealth", setpath))
@@ -341,9 +349,6 @@ saveRDS(wbs, "wbs_data.rds")
 
 setwd(sprintf("~%s/ehealth", setpath))
 audio <- readRDS("audio_duration.rds")
-
-source("rename_interviewer.R", encoding="utf-8")
-df$interviewer_name <- rename_interviewer(df$interviewer_name)
 
 df$time <- car::recode(df$evaluation_event, "
 1 = 0;
