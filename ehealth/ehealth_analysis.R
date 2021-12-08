@@ -92,7 +92,7 @@ scoring <- function(df){
 df <- cbind(df, scoring(df))
 
 # restrict sample to age >= 60 ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-10-31'),]
+# df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-11-15'),]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age >= 60),]
 
@@ -516,7 +516,9 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
 
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
 # temp <- df[df$time %in% c(0,1) & df$gender == "M" & df$age_group == "60-69", ]
-temp <- df[df$time %in% c(1,2), ]
+temp <- df[df$time %in% c(0,1), ]
+
+# temp <- temp[temp$interviewer_name %in% c("Ashley Leung", "Eva Mak", "Susan To", "Tang Tsz Chung", "Lucas Li", "Vicky", "Chan Ka Wai, Katherine", "Carman Yeung", "Yan"), ] # restrict to interviewers with longer interview duration
 gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
@@ -1383,7 +1385,7 @@ plot_ehealth <-
   ) 
 
 plot_covid <-
-  ggplot(covid, aes(x=as.Date(date), y = new_confirmed)) +
+  ggplot(covid[covid$date <= as.Date("2021-10-31"),], aes(x=as.Date(date), y = new_confirmed)) +
   labs(
     # title = "COVID-19 cases",
     x = "", 
