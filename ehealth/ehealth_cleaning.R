@@ -313,6 +313,7 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$path <- gsub("SSYå—‡è‰²åœ’", "SSY嗇色園", audio$path)
 # audio$path <- gsub("YCHä»æ¿Ÿ", "YCH仁濟", audio$path)
 # audio$path <- gsub("YWCåŸºç£æ•™å¥³é’å¹´æœƒ", "YWC基督教女青年會", audio$path)
+# audio$path <- gsub("HUBè³½é¦¬æœƒæµé‡‘åŒ¯", "HUB賽馬會流金匯", audio$path)
 # 
 # audio$path <- gsub("éœ€å†æ‰“", "需再打", audio$path)
 # audio$path <- gsub("å””å¾—é–’", "唔得閒", audio$path)
@@ -321,10 +322,12 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$path <- gsub("éœ€å†è‡´é›»", "需再致電", audio$path)
 # audio$path <- gsub("å†ç´„æ™‚é–“", "再約時間", audio$path)
 # audio$path <- gsub("å¥³å…’ä»£ç­”", "女兒代答", audio$path)
+# audio$path <- gsub("â€“", "–", audio$path)
 # 
 # audio <- audio %>% filter(!grepl(".ini", audio[,1], ignore.case = TRUE)) # exclude non audio files (not mp3|wav|mov|m4a|etc)
 # audio$filename <- basename(audio$path)
-# audio$member_id <- before_char(audio$filename, "-|_")
+# audio$member_id <- gsub("Baseline-|baseline-|6months-|6month-|6motnh-|12month-|12month_|1year-", "", audio$filename)
+# audio$member_id <- before_char(audio$member_id, "-|_")
 # audio$member_id <- after_char(audio$member_id, ")")
 # audio$member_id <- ifelse(!grepl("\\D", audio$member_id),
 #                                between_char(audio$filename, "-", "-"),
@@ -344,6 +347,15 @@ saveRDS(wbs, "wbs_data.rds")
 # stopCluster(cl)
 # rm(cl)
 # 
+# # alternative dates from file name
+# audio$file_date2 <- gsub('.*[_|-]([0-9]+).*','\\1', audio$filename_no_id) # \\1 returns first match 
+# audio$file_date2 <- ifelse(nchar(audio$file_date2) == 8 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2, 
+#                            ifelse(nchar(audio$file_date2) == 6 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2, NA))
+# audio$file_date2 <- gsub("2921", "2021", audio$file_date2)
+# audio$file_date2 <- if_else(nchar(audio$file_date2) == 8,  as.Date(audio$file_date2, format = "%Y%m%d"), 
+#                             ifelse(nchar(audio$file_date2) == 6,   as.Date(audio$file_date2, format = "20%y%m%d"), NA))
+# audio$file_date <- if_else(audio$file_date < as.Date("2020-01-01"), audio$file_date2, audio$file_date) # fix dates wrong dates showing year 2017
+# 
 # setwd(sprintf("~%s/ehealth", setpath))
 # saveRDS(audio, "audio_duration.rds")
 
@@ -359,7 +371,9 @@ df$time <- car::recode(df$evaluation_event, "
 6 = NA
 ")
 
-audio$time <- ifelse(grepl("baseline", audio$path, ignore.case = TRUE), 0, 1)
+audio$time <- ifelse(grepl("- Baseline", audio$path, ignore.case = TRUE), 0, 
+                     ifelse(grepl("- 6-month", audio$path, ignore.case = TRUE), 1, 
+                            ifelse(grepl("- 12-month", audio$path, ignore.case = TRUE), 2, NA)))
 
 # audio$vc_duration <- ifelse(grepl("vc", audio$filename_no_id, ignore.case = TRUE) &
 #                             !grepl("q", audio$filename_no_id, ignore.case = TRUE), audio$duration, NA)
@@ -372,21 +386,22 @@ temp <- audio %>%
   group_by(member_id, time) %>% 
   summarise(duration = sum(duration, na.rm = TRUE)) # sum duration for each ID and time point
 
-temp <- merge(temp, df[, c("member_id", "time", "interviewer_name")], # extract item matched by case ID
+temp <- merge(temp, df[, c("member_id", "time", "interviewer_name", "ehealth_eval_timestamp")], # extract item matched by case ID
               by=c("member_id", "time"), all.x = TRUE)
 
-temp %>% 
+temp <- temp %>% 
   group_by(interviewer_name
-           , time
+           # , time
   ) %>% 
   mutate(n_audio=n()) %>%
   group_by(interviewer_name,
-           time,
+           # time,
            n_audio) %>%
   summarise_at(vars(duration), funs(mean = mean(., na.rm=TRUE),
                                     median = median(., na.rm=TRUE), 
                                     sd = sd(., na.rm=TRUE),
                                     min = min(., na.rm=TRUE),
                                     max = max(., na.rm=TRUE))
-               ) %>% clipr::write_clip()
+               ) 
+temp %>% clipr::write_clip()
 
