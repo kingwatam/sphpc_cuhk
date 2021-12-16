@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-12-01_1033.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-12-13_1127.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -215,6 +215,7 @@ wbs <- wbs[order(wbs$member_id, wbs$wbs_survey_date),] # order by WBS survey dat
 wbs <- wbs %>% group_by(member_id) %>% mutate(id_row = row_number()) # %>% add_count(member_id, Round) %>% filter(n==2) %>% dplyr::select(wbs_survey_date, member_id, Round, id_row) %>% View()
 wbs$Round <- ifelse(wbs$id_row != wbs$Round, wbs$id_row, wbs$Round)
 wbs <- wbs[wbs$id_row <= 2, ]
+wbs$id_row <- NULL
 wbs <- distinct(wbs, member_id, Round, .keep_all = TRUE) # keep only first instance 
 
 wbs <- as.data.frame(wbs)
@@ -249,10 +250,6 @@ wbs$Aeservices_day <- as.numeric(wbs$Aeservices_day)
 wbs$Aeservices_day <- ifelse(wbs$Aeservices_day %in% NA, 0, wbs$Aeservices_day)
 wbs$Aeservices <- ifelse(wbs$Aeservices_day == 0, 0, wbs$Aeservices)
 
-df$member_id <- toupper(df$member_id)
-df <- merge(df, wbs[wbs$Round == 1, c("member_id", vars)], # extract item matched by member ID
-            by=c("member_id"), all.x = TRUE)
-
 # # replace the few missing values from latest wbs data (dob, gender, etc)
 # for (var in vars){
 #   temp <- data.frame(member_id = wbs2$member_id[wbs2$member_id %in% df$member_id[is.na(df[[var]]) & df$member_id %in% wbs2$member_id]],
@@ -266,14 +263,26 @@ df <- merge(df, wbs[wbs$Round == 1, c("member_id", vars)], # extract item matche
 #   rm(temp)
 # }
 
-df$age <- floor(interval(df$dob, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
+wbswide <-  reshape(data=wbs, idvar=  "member_id",
+                    sep = ".r", 
+                    timevar = "Round",
+                    direction="wide")
+
+df$member_id <- toupper(df$member_id)
+df <- merge(df, wbswide[, c("member_id", "dob.r1")], # extract item matched by member ID
+            by=c("member_id"), all.x = TRUE)
+
+df$age <- floor(interval(df$dob.r1, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
 
 df$age_group <- recode_age(df$age, age_labels = c("50-59", "60-69", "70-79", "80+"))
 df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 
 df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
+df$dob.r1 <- NULL
+df$age <- NULL
+df$age_group <- NULL
 
-# wbs2$risk_score <- wbs2$Age_score + wbs2$Heart_score + wbs2$Income_cssa_score + wbs2$FS_score + wbs2$AMIC_score + wbs2$Self_rated_health_score + wbs2$Satisfaction_score + wbs2$Happiness_score + wbs2$Hospital_score + wbs2$Drug_use_score
+# wbs2$risk_score2 <- wbs2$Age_score + wbs2$Heart_score + wbs2$Income_cssa_score + wbs2$FS_score + wbs2$AMIC_score + wbs2$Self_rated_health_score + wbs2$Satisfaction_score + wbs2$Happiness_score + wbs2$Hospital_score + wbs2$Drug_use_score
 
 # clean up names of interviewers ----
 setwd(sprintf("~%s/ehealth", setpath))
@@ -326,7 +335,7 @@ saveRDS(wbs, "wbs_data.rds")
 # 
 # audio <- audio %>% filter(!grepl(".ini", audio[,1], ignore.case = TRUE)) # exclude non audio files (not mp3|wav|mov|m4a|etc)
 # audio$filename <- basename(audio$path)
-# audio$member_id <- gsub("Baseline-|baseline-|6months-|6month-|6motnh-|12month-|12month_|1year-", "", audio$filename)
+# audio$member_id <- gsub("Baseline-|baseline-|6months-|6month-|6motnh-|6month_|12month-|12month_|1year-", "", audio$filename)
 # audio$member_id <- before_char(audio$member_id, "-|_")
 # audio$member_id <- after_char(audio$member_id, ")")
 # audio$member_id <- ifelse(!grepl("\\D", audio$member_id),
@@ -348,11 +357,11 @@ saveRDS(wbs, "wbs_data.rds")
 # rm(cl)
 # 
 # # alternative dates from file name
-# audio$file_date2 <- gsub('.*[_|-]([0-9]+).*','\\1', audio$filename_no_id) # \\1 returns first match 
-# audio$file_date2 <- ifelse(nchar(audio$file_date2) == 8 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2, 
+# audio$file_date2 <- gsub('.*[_|-]([0-9]+).*','\\1', audio$filename_no_id) # \\1 returns first match
+# audio$file_date2 <- ifelse(nchar(audio$file_date2) == 8 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2,
 #                            ifelse(nchar(audio$file_date2) == 6 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2, NA))
 # audio$file_date2 <- gsub("2921", "2021", audio$file_date2)
-# audio$file_date2 <- if_else(nchar(audio$file_date2) == 8,  as.Date(audio$file_date2, format = "%Y%m%d"), 
+# audio$file_date2 <- if_else(nchar(audio$file_date2) == 8,  as.Date(audio$file_date2, format = "%Y%m%d"),
 #                             ifelse(nchar(audio$file_date2) == 6,   as.Date(audio$file_date2, format = "20%y%m%d"), NA))
 # audio$file_date <- if_else(audio$file_date < as.Date("2020-01-01"), audio$file_date2, audio$file_date) # fix dates wrong dates showing year 2017
 # 
@@ -379,29 +388,38 @@ audio$time <- ifelse(grepl("- Baseline", audio$path, ignore.case = TRUE), 0,
 #                             !grepl("q", audio$filename_no_id, ignore.case = TRUE), audio$duration, NA)
 # audio <- audio %>% filter(is.na(vc_duration)) # remove vc duration
 
-audio$incomplete <- ifelse(grepl("reject|recall|partial|half|cannot reach|callagain|未能|唔得閒|需再致電|需再打|再約時間", audio$filename_no_id, ignore.case = TRUE), 1, 0) # remove incomplete interviews
+audio$incomplete <- ifelse(grepl("reject|recall|partial|half|cannot reach|callagain|未能|唔得閒|需再致電|需再打|再約時間|did not resume", audio$filename_no_id, ignore.case = TRUE), 1, 0) # remove incomplete interviews
 audio <- audio %>% filter(incomplete == 0)
 
 temp <- audio %>% 
   group_by(member_id, time) %>% 
   summarise(duration = sum(duration, na.rm = TRUE)) # sum duration for each ID and time point
 
+# temp <- merge(df, temp,
+#               by=c("member_id", "time"), all.x = TRUE)
+# temp <- temp %>% filter(time %in% c(0, 1))  %>% add_count(member_id, name = "n") %>% filter(n == 2)
+
 temp <- merge(temp, df[, c("member_id", "time", "interviewer_name", "ehealth_eval_timestamp")], # extract item matched by case ID
               by=c("member_id", "time"), all.x = TRUE)
 
-temp <- temp %>% 
-  group_by(interviewer_name
+table <- temp %>% 
+  group_by(
+    interviewer_name
            # , time
-  ) %>% 
+  ) %>%
   mutate(n_audio=n()) %>%
-  group_by(interviewer_name,
+  group_by(
+    interviewer_name,
            # time,
            n_audio) %>%
   summarise_at(vars(duration), funs(mean = mean(., na.rm=TRUE),
-                                    median = median(., na.rm=TRUE), 
+                                    median = median(., na.rm=TRUE),
                                     sd = sd(., na.rm=TRUE),
                                     min = min(., na.rm=TRUE),
-                                    max = max(., na.rm=TRUE))
-               ) 
-temp %>% clipr::write_clip()
+                                    max = max(., na.rm=TRUE),
+                                    min_5th = sort(., decreasing = FALSE)[5],
+                                    q.5 = quantile(., 0.05),
+                                    q1 = quantile(., 0.1))
+               )
+table %>% clipr::write_clip()
 

@@ -58,6 +58,7 @@ df$time <- car::recode(df$evaluation_event, "
 5 = 3;
 6 = NA
 ") # (T0 = baseline, T1 = 6mth, T2 = 12mth, T3 = = 18mth)
+val_labels(df$time) <- NULL
 
 # nursing protocol data ----
 temp <- readxl::read_xlsx("nursing protocol _With Raw Data (20200201-20211031)_20211118.xlsm", sheet  = "data"
