@@ -472,7 +472,7 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
 
   if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
     n <- iferror(nobs(fit), NA)
-    n_unique <- iferror(summary(fit)$ngrps, NA)
+    n_unique <- iferror(summary(fit)$ngrps[1], NA)
     table[row_count, 1] <- "N (unique)"
     table[row_count, col_count] <-  paste0(n, " (", n_unique, ")")
     row_count <- row_count + 1
