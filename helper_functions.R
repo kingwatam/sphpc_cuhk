@@ -176,26 +176,33 @@ round_format <- function(value, decimal_places = 2, check_object = FALSE){
 } 
 
 starred_p <- function(p_value, decimal_places, related_value = NULL){
-  if (is.null(related_value)){
-    value <- p_value
+  if (length(p_value) > 1 | length(related_value) > 1 ){
+    length <- length(p_value)
+    return(sapply(seq(1:length), FUN = function(i) starred_p(p_value[i], decimal_places, related_value[i])))
   } else {
-    value <- related_value
-  }
-  p <- as.numeric(p_value)
-  if (is.na(p)){
-    return(NA)
-  }
-  if(p < 0.001){
-    return(paste0(round_format(value, decimal_places),"***"))
-  }
-  else if(p >= 0.001 & p < 0.01){
-    return(paste0(round_format(value, decimal_places),"**"))
-  }
-  else if(p >= 0.01 & p < 0.05){
-    return(paste0(round_format(value, decimal_places),"*"))
-  }
-  else{
-    return(round_format(value, decimal_places))
+    
+    if (is.null(related_value)){
+      value <- p_value
+    } else {
+      value <- related_value
+    }
+    p <- as.numeric(p_value)
+    if (is.na(p)){
+      return(NA)
+    }
+    if(p < 0.001){
+      return(paste0(round_format(value, decimal_places),"***"))
+    }
+    else if(p >= 0.001 & p < 0.01){
+      return(paste0(round_format(value, decimal_places),"**"))
+    }
+    else if(p >= 0.01 & p < 0.05){
+      return(paste0(round_format(value, decimal_places),"*"))
+    }
+    else{
+      return(round_format(value, decimal_places))
+    }
+    
   }
 }
 
