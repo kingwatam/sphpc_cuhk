@@ -14,6 +14,10 @@ library(lmerTest)
 library(ordinal) # clm & clmm
 library(multcomp) # glht
 library(patchwork)
+library(MASS) # stepAIC
+library(glmnet) # cv.glmnet
+library(selectiveInference)
+library(islasso)
 
 # import cleaned data
 setwd(sprintf("~%s/ehealth", setpath))
@@ -57,16 +61,16 @@ df <- cbind(df, scoring(df))
 
 # merge with WBS data----
 wbsvars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
-          "Phase1_member_self_report", "DH_centre_member", "Carer", "Hypertension", "Hypertension_HA",
-          "Diabetes", "Diabetes_HA", "Cholesterol", "Heart", "Heart_score", "Stroke", "Copd", "Renal", 
-          "Disease_other", "Disease_other_indicate", "marital", "educ", "Income_oaa", "Income_oala", 
-          "Income_ssa", "Income_work", "Income_saving", "Income_cssa", "Income_cssa_score", "Income_pension",
-          "Income_child", "Income_other", "living_status", "housing_type", "Rent", "Own", "FS1", "FS2", "FS3",
-          "FS4", "FS5", "FS_total", "FS_score", "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5", "SAR_total", "AMIC",
-          "AMIC_score", "Self_rated_health", "Self_rated_health_score", "Satisfaction", "Satisfaction_score",
-          "Meaning_of_life", "Happiness", "Happiness_score", "Incontinence", "Hospital", "Hospital_day", 
-          "Hospital_score", "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
-          "Drug_use", "Drug_use_score", "risk_score", "risk_level", "digital", "Centre", "NGO")
+             "Phase1_member_self_report", "DH_centre_member", "Carer", "Hypertension", "Hypertension_HA",
+             "Diabetes", "Diabetes_HA", "Cholesterol", "Heart", "Heart_score", "Stroke", "Copd", "Renal", 
+             "Disease_other", "Disease_other_indicate", "marital", "educ", "Income_oaa", "Income_oala", 
+             "Income_ssa", "Income_work", "Income_saving", "Income_cssa", "Income_cssa_score", "Income_pension",
+             "Income_child", "Income_other", "living_status", "housing_type", "Rent", "Own", "FS1", "FS2", "FS3",
+             "FS4", "FS5", "FS_total", "FS_score", "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5", "SAR_total", "AMIC",
+             "AMIC_score", "Self_rated_health", "Self_rated_health_score", "Satisfaction", "Satisfaction_score",
+             "Meaning_of_life", "Happiness", "Happiness_score", "Incontinence", "Hospital", "Hospital_day", 
+             "Hospital_score", "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
+             "Drug_use", "Drug_use_score", "risk_score", "risk_level", "digital", "Centre", "NGO")
 
 df$time <- car::recode(df$evaluation_event, "
 1 = 0;
@@ -101,7 +105,7 @@ dfwide <- merge(dfwide, wbswide[, c("member_id", paste0(wbsvars, ".r1"), paste0(
 
 dfwide$age.r1 <- floor(interval(dfwide$dob.r1, dfwide$ehealth_eval_timestamp.t0) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
 
-dfwide$age_group.r1 <- recode_age(dfwide$age.r1, age_labels = c("50-59", "60-69", "70-79", "80+"))
+dfwide$age_group.r1 <- recode_age(dfwide$age.r1, age_labels = c("60-69", "70-79", "80+"))
 dfwide$age_group.r1 <- relevel(as.factor(dfwide$age_group.r1), ref = "60-69")
 
 # set variable names ----
@@ -141,9 +145,19 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_sum", "Diet score")), dim = c(2,34)))
 
 # restrict sample to age >= 60 ----
-# df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-11-15'),]
+cutoff_date <- as.Date('2022-01-31')
+df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age.r1 >= 60),]
+dfwide <- dfwide[which(dfwide$age.r1 >= 60),]
+
+# loss to follow-up ----
+temp <- df
+temp$days_sincebl <-  cutoff_date - as.Date(temp$ehealth_eval_timestamp)
+
+leeway <- 60 # days
+temp[temp$time==1, ] %>% nrow()/sum((temp$days_sincebl[temp$time==0 ] >= (182+leeway)))
+temp[temp$time==2, ] %>% nrow()/sum((temp$days_sincebl[temp$time==0 ] >= (365+leeway)))
 
 # pre-post results for powerpoint ----
 to_character_df <- function(df, vars){
@@ -401,7 +415,7 @@ ordinalVars <- c("amic",
 
 medianVars <- c("use_health_service_8")
 
-gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = "time", id = "member_id", to_English = FALSE){ 
+gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_levels = TRUE, medianVars = NULL, paired = TRUE, group = "time", id = "member_id", to_English = FALSE, decimal = 3){ 
   table <- data.frame(matrix(ncol = 7,  nrow = 0))
   row_count <- 1
   col_bl <- 3
@@ -434,8 +448,8 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   colnames(table)[1] <- ""
   colnames(table)[2] <- ""
   colnames(table)[col_bl] <- "Baseline (all)"
-  colnames(table)[col_bl2] <- "Baseline (paired)"
-  colnames(table)[col_f1] <- "6 months (paired)"
+  colnames(table)[col_bl2] <- "Pre-test (paired)"
+  colnames(table)[col_f1] <- "Post-test (paired)"
   colnames(table)[col_dif] <- "Difference"
   colnames(table)[col_pval] <- "p-value"
   
@@ -463,55 +477,84 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
   
   for (var in vars){
     print(var)
-    if (var %in% ordinalVars){
+    if (var %in% ordinalVars | var %in% nominalVars){
       table[row_count, 1] <- var
       
-      wilcox_test <-  
-        wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
-      if (wilcox_test$p.value < 0.001){
-        table[row_count, col_pval] <- "<0.001"
-      } else {
-        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = 3)
+      if(var %in% ordinalVars){
+        wilcox_test <-  
+          wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
+        if (wilcox_test$p.value < 0.001){
+          table[row_count, col_pval] <- "<0.001"
+        } else {
+          table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = decimal)
+        }
+      } else if (var %in% nominalVars){
+        levels <- c(unique(unique(dfwide2[[paste0(var, ".", pre)]]), unique(dfwide2[[paste0(var, ".", post)]])))
+        mcnemar_test <-  
+          mcnemar.test(table(factor(dfwide2[[paste0(var, ".", pre)]], levels = levels), factor(dfwide2[[paste0(var, ".", post)]], levels = levels))) 
+        if (mcnemar_test$p.value %!in% NaN && mcnemar_test$p.value < 0.001){
+          table[row_count, col_pval] <- "<0.001"
+        } else {
+          table[row_count, col_pval] <- mcnemar_test$p.value %>% round(digits = decimal)
+        }
       }
       
-      for (val in unique(df_en[[var]])[order(unique(df_en[[var]]))]){
-        table[row_count, 2] <- val
-        
-        if (val %in% NA){
-          table[row_count, 2] <- "N/A"
-        }
-        
-        table[row_count, col_bl] <- 
-          table(df_en[[var]],useNA = "ifany") %>% 
-          prop.table() %>% as.data.frame() %>% 
-          .[which(.$Var1 %in% val),"Freq"] 
-        
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == pre)])){
-          table[row_count, col_bl2] <- iferror(
-            table(df2_en[[var]][which(df2[[group]] == pre)],useNA = "ifany") %>%
+      if (show_levels){
+        for (val in unique(df_en[[var]])[order(unique(df_en[[var]]))]){
+          
+          
+          table[row_count, 2] <- val
+          
+          if (val %in% NA){
+            table[row_count, 2] <- "N/A"
+          }
+          
+          table[row_count, col_bl] <- 
+            table(df_en[[var]],useNA = "ifany") %>% 
+            prop.table() %>% as.data.frame() %>% 
+            .[which(.$Var1 %in% val),"Freq"] 
+          
+          if (val %in% unique(df2_en[[var]][which(df2[[group]] == pre)])){
+            table[row_count, col_bl2] <- iferror(
+              table(df2_en[[var]][which(df2[[group]] == pre)],useNA = "ifany") %>%
+                prop.table() %>% as.data.frame() %>%
+                .[which(.$Var1 %in% val),"Freq"], NA)
+          } else {
+            table[row_count, col_bl2]  <- 0
+          }
+          
+          if (val %in% unique(df2_en[[var]][which(df2[[group]] == post)])){
+            table[row_count, col_f1] <-
+              table(df2_en[[var]][which(df2[[group]] == post)],useNA = "ifany") %>%
               prop.table() %>% as.data.frame() %>%
-              .[which(.$Var1 %in% val),"Freq"], NA)
-        } else {
-          table[row_count, col_bl2]  <- 0
-        }
+              .[which(.$Var1 %in% val),"Freq"]
+          } else {
+            table[row_count, col_f1]  <- 0 
+          }
+          
+          table[row_count, col_dif] <- as.numeric(table[row_count, col_f1]) - as.numeric(table[row_count, col_bl2])
+          table[row_count, col_bl] <- table[row_count, col_bl] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+          table[row_count, col_bl2] <- table[row_count, col_bl2] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+          table[row_count, col_f1] <- table[row_count, col_f1] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+          table[row_count, col_dif] <- table[row_count, col_dif] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+          
+          row_count <- row_count + 1
+          
+        } 
+      } else {
         
-        if (val %in% unique(df2_en[[var]][which(df2[[group]] == post)])){
-          table[row_count, col_f1] <-
-            table(df2_en[[var]][which(df2[[group]] == post)],useNA = "ifany") %>%
-            prop.table() %>% as.data.frame() %>%
-            .[which(.$Var1 %in% val),"Freq"]
-        } else {
-          table[row_count, col_f1]  <- 0 
-        }
+        table[row_count, 2] <- "mean (sd)"
+        table[row_count, col_bl] <-  get_mean_sd(df[[var]][which(df[[group]] == pre)])
+        table[row_count, col_bl2] <- get_mean_sd(df2[[var]][which(df2[[group]] == pre)])
+        table[row_count, col_f1] <-  get_mean_sd(df2[[var]][which(df2[[group]] == post)])
         
-        table[row_count, col_dif] <- as.numeric(table[row_count, col_f1]) - as.numeric(table[row_count, col_bl2])
-        table[row_count, col_bl] <- table[row_count, col_bl] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_bl2] <- table[row_count, col_bl2] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_f1] <- table[row_count, col_f1] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
-        table[row_count, col_dif] <- table[row_count, col_dif] %>% as.numeric() %>% scales::percent(accuracy = 0.1)
+        table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = decimal-1)
         
-        row_count <- row_count + 1
       }
+      
+      row_count <- row_count + 1
+      
+      
     } else {
       table[row_count, 1] <- var
       
@@ -522,11 +565,11 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
       
       t_test <-  
         t.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
-      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = 2)
+      table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = decimal-1)
       if (t_test$p.value < 0.001){
         table[row_count, col_pval] <- "<0.001"
       } else {
-        table[row_count, col_pval] <- t_test$p.value %>% round(digits = 3)
+        table[row_count, col_pval] <- t_test$p.value %>% round(digits = decimal)
       }
       
       row_count <- row_count + 1
@@ -545,7 +588,7 @@ gen_table <- function(df, vars, ordinalVars, medianVars, paired = TRUE, group = 
       if (wilcox_test$p.value < 0.001){
         table[row_count, col_pval] <- "<0.001"
       } else {
-        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = 3)
+        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = decimal)
       }
       
       row_count <- row_count + 1
@@ -558,9 +601,31 @@ Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English un
 # temp <- df[df$time %in% c(0,1) & df$gender == "M" & df$age_group == "60-69", ]
 temp <- df[df$time %in% c(1,2), ]
 
+# temp <- df[df$member_id %in% df_matched$member_id_old[df_matched$int == 0],]
+# temp <- temp[temp$time %in% c(0,1), ]
+
 # temp <- temp[temp$interviewer_name %in% c("Ashley Leung", "Eva Mak", "Susan To", "Tang Tsz Chung", "Lucas Li", "Vicky", "Chan Ka Wai, Katherine", "Carman Yeung", "Yan"), ] # restrict to interviewers with longer interview duration
 gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
+
+# scatter plots ----
+setwd(sprintf("~%s/sarcopenia", setpath))
+
+import_func("sar_analysis.R")
+setwd(sprintf("~%s/ehealth", setpath))
+
+dfwide$eq5d_dif <- dfwide$eq5d.t1-dfwide$eq5d.t0
+dfwide$self_efficacy_dif <- dfwide$self_efficacy.t1-dfwide$self_efficacy.t0
+
+varlist <- t(array(c(c("ehealth_eval_timestamp.t1", "ehealth_eval_timestamp.t1"), 
+                     c("eq5d_dif", "eq5d_dif"),
+                     c("self_efficacy_dif", "self_efficacy_dif")
+),
+dim = c(2,3))) %>% as.data.frame()
+
+get_plot(dfwide, 
+         x = "ehealth_eval_timestamp.t1", y = "eq5d_dif", 
+         jitter_w = 0.25, jitter_h = 0.25)
 
 # pre-post results with adjustments ----
 temp <- df %>% filter(time %in% c(0, 1))  %>% add_count(member_id, name = "n") %>% filter(n == 2)
@@ -674,6 +739,138 @@ for (var in allVars){
 }
 table %>% clipr::write_clip()
 
+# lasso & stepwise ----
+xvars <- c("gender", "age",
+           "Hypertension", # "Hypertension_HA",
+           "Diabetes", # "Diabetes_HA", 
+           "Cholesterol", "Heart", # "Heart_score", 
+           "Stroke", "Copd", "Renal", "Disease_other", # "married", 
+           "educ", "Income_oaa", "Income_oala", 
+           "Income_ssa", "Income_work", "Income_saving", "Income_cssa", # "Income_cssa_score", 
+           "Income_pension", "Income_child", "Income_other", # "living_status", "housing_type", 
+           "Rent", "Own", "FS1", "FS2", "FS3", "FS4", "FS5", 
+           "FS_total", # "FS_score", 
+           "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5", 
+           "SAR_total", "AMIC", # "AMIC_score", 
+           "Self_rated_health", # "Self_rated_health_score", 
+           "Satisfaction", # "Satisfaction_score",
+           "Meaning_of_life", "Happiness", # "Happiness_score", 
+           "Incontinence", "Hospital", "Hospital_day", # "Hospital_score", 
+           "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
+           "Drug_use", # "Drug_use_score", 
+           "risk_score")
+
+allVars <- c("amic", "amic_sum", 
+             "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
+             "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
+             "satisfaction_1", "satisfaction_2", 
+             "pase_c", "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_11_1", "pase_c_12_1", "pase_c_12",
+             "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
+             "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5", "diet_sum", "use_health_service_8")
+
+similar_chars <- c("amic", "self_efficacy", "eq5d", "FS", "SAR", "diet", "pase", "hospital")
+matched_pattern <- function(x, patterns){
+  for (i in 1:length(patterns)){
+    if (grepl(patterns[i], x, ignore.case = TRUE)){
+      return(patterns[i])
+    }
+  }
+  return(NA)
+}
+
+# # code for testing lasso
+# skipped_var <- "amic"
+# temp <- dfwide %>% select(paste0(xvars[!grepl(skipped_var, xvars, ignore.case = TRUE)], ".r1"), paste0(allVars[!grepl(skipped_var, allVars, ignore.case = TRUE)], ".t0"))
+# temp$y <- (dfwide$amic_sum.t1-dfwide$amic_sum.t0)
+# temp <- na.omit(temp)
+# y <- temp$y
+# temp$y <- NULL
+# 
+# set.seed(27121)
+# fit <- cv.glmnet(makeX(temp), y, alpha=1) # (lasso:alpha=1, ridge:alpha=0)
+# plot(fit)
+# coef(fit, s = "lambda.min") %>% na.omit() # %>% length()
+# fit$cvm[fit$lambda == fit$lambda.min] # min MSE + 1 se
+# fit$nzero[fit$lambda == fit$lambda.min]
+# coef(fit, s = "lambda.min") %>% as.matrix %>% as.data.frame %>% filter(s1 != 0)
+# 
+# elasticnet <- lapply(seq(0,1,by=0.1), function(a){
+#   set.seed(27121)
+#   cv.glmnet(makeX(temp), y, alpha=a)
+# })
+# for (i in 1:11) {print(min(elasticnet[[i]]$cvm))}
+
+# islasso
+table <- data.frame()
+for (var in c(allVars, xvars[3:length(xvars)])){
+  print(var)
+  skipped_var <- matched_pattern(var, similar_chars)
+  if (skipped_var %in% NA){
+    temp <- dfwide %>% select(paste0(xvars, ".r1"), paste0(allVars, ".t0"))
+  } else {
+    temp <- dfwide %>% select(paste0(xvars[!grepl(skipped_var, xvars, ignore.case = TRUE)], ".r1"), paste0(allVars[!grepl(skipped_var, allVars, ignore.case = TRUE)], ".t0"))
+  }
+  if (var %in% allVars){
+    temp$y <- dfwide[[paste0(var, ".t1")]] 
+    temp[[paste0(var, ".t0")]] <- dfwide[[paste0(var, ".t0")]]
+  } else if (var %in% xvars){
+    temp$y <- dfwide[[paste0(var, ".r2")]] 
+    temp[[paste0(var, ".r1")]] <- dfwide[[paste0(var, ".r1")]]
+  }
+  
+  # islasso
+  temp <- na.omit(temp)
+  set.seed(27121)
+  fit <- islasso(y ~ ., data=temp)
+  
+  table_temp <- summary(fit) %>% coef() %>% as.data.frame()
+  table_temp <- table_temp[table_temp$`Pr(>|z|)` < 0.1 | row.names(table_temp) %in% "(Intercept)",] # drop estimates if p-value >= 0.1, except for intercept
+  table_temp$Estimate <- starred_p(table_temp$`Pr(>|z|)`, decimal_places = 3, table_temp$Estimate)
+  table_temp$variables <- row.names(table_temp)
+  table_temp <- rbind(NA, table_temp)
+  table_temp$variables[table_temp$variables %in% NA] <- "N"
+  table_temp$Estimate[table_temp$variables == "N"] <-  fit$internal$n
+  table_temp <- rbind(NA, table_temp)
+  table_temp$variables[table_temp$variables %in% NA] <- "R2"
+  table_temp$Estimate[table_temp$variables == "R2"] <-  round(1 - ((fit$deviance/-2)) / (fit$null.deviance/-2) , 3) # 1- sum((fit$fitted.values - fit$data$y) ^ 2)/sum((fit$data$y - mean(fit$data$y)) ^ 2)  or  cor(fit$fitted.values, fit$data$y)^2 
+  table_temp <- table_temp %>% select(variables, Estimate)
+  names(table_temp)[names(table_temp) == "Estimate"] <- var
+  table <- merge(table, table_temp, all = TRUE)
+  
+  if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
+  # rm(fit, table_temp)
+}
+# table <- rbind(table[table$X1=="N",], table[table$X1=="R2",], table[table$X1=="(Intercept)",], table[table$X1 %!in% c("N", "R2", "(Intercept)"),])
+table %>% clipr::write_clip()
+
+# stepwise variable selection
+table <- data.frame()
+for (var in c(allVars, 
+              xvars[3:length(xvars)])){
+  skipped_var <- matched_pattern(var, similar_chars)
+  if (skipped_var %in% NA){
+    temp <- dfwide %>% select(paste0(xvars, ".r1"), paste0(allVars, ".t0"))
+  } else {
+    temp <- dfwide %>% select(paste0(xvars[!grepl(skipped_var, xvars, ignore.case = TRUE)], ".r1"), paste0(allVars[!grepl(skipped_var, allVars, ignore.case = TRUE)], ".t0"))
+  }
+  if (var %in% allVars){
+    temp$y <- dfwide[[paste0(var, ".t1")]] 
+    temp[[paste0(var, ".t0")]] <- dfwide[[paste0(var, ".t0")]]
+  } else if (var %in% xvars){
+    temp$y <- dfwide[[paste0(var, ".r2")]] 
+    temp[[paste0(var, ".r1")]] <- dfwide[[paste0(var, ".r1")]]
+  }
+  table_temp <- combine_tables(NULL, 
+                               dep_var = var,
+                               stepAIC(lm(y ~ . , data = na.omit(temp)), 
+                                       direction = "both", 
+                                       trace = FALSE)
+  )
+  table <- merge(table, table_temp, all = TRUE)
+  if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
+}
+table <- rbind(table[table$X1=="N",], table[table$X1=="R2",], table[table$X1=="(Intercept)",], table[table$X1 %!in% c("N", "R2", "(Intercept)"),])
+
 # exploratory analysis to explain pre-post results  ----
 table <- combine_tables(NULL, 
                         dep_var = paste0("amic", "f1 - ", "amic", "f0"),
@@ -765,12 +962,16 @@ table %>% clipr::write_clip()
 # PSM - baseline & follow-up in same period ----
 # temp <- df[, c(1:107)]
 temp <- df[df$time %in% c(0,1), ]
+# temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-11-15'),]
+
 temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
                (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') |
                   as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
 
 temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
-temp2 <- temp %>% add_count(member_id) %>% filter(as.Date(ehealth_eval_timestamp) >= as.Date('2021-03-28') & n == 1 &
+temp2 <- temp %>% add_count(member_id) %>% filter(
+  as.Date(ehealth_eval_timestamp) >= as.Date('2021-03-28') & 
+                                                    n == 1 &
                                                     member_id %!in% unique(temp1$member_id) & time == 0)
 temp <- rbind(temp1, temp2)
 rm(temp1, temp2)
@@ -788,9 +989,10 @@ rm(temp1, temp2)
 #            ,]
 # temp$time <- (temp$time-1)*-1
 
-vars <- c("member_id", "gender", "dob", "wbs_survey_date",
-          "marital", "educ", "living_status", "housing_type",
-          "risk_score", "risk_level", "digital")
+
+vars <- c("member_id", "gender.r1", "dob.r1", "wbs_survey_date.r1",
+          "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1",
+          "risk_score.r1", "risk_level.r1", "digital.r1")
 
 get_descstat <- function(df){
   for (var in vars){
@@ -798,7 +1000,7 @@ get_descstat <- function(df){
         is.labelled(df[[var]])){
       df[[var]] <- to_character(df[[var]])
       
-      if (!(var %in% c("educ"))){ # exceptions
+      if (!(var %in% c("educ.r1"))){ # exceptions
         xLabels = names(table(df[[var]]))[order(table(df[[var]]), decreasing = TRUE)] # order factor levels in descending order
         df[[var]] = factor(df[[var]], levels=xLabels)
         
@@ -806,8 +1008,8 @@ get_descstat <- function(df){
     }
   }
   
-  allVars <- c("age", "age_group", "gender", "marital", "educ", "living_status", "housing_type", "risk_score")
-  catVars <- c("age_group", "gender", "marital", "educ", "living_status", "housing_type")
+  allVars <- c("age.r1", "age_group.r1", "gender.r1", "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1", "risk_score.r1")
+  catVars <- c("age_group.r1", "gender.r1", "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1")
   tableone::CreateTableOne(data =  df,
                            strata = c("time"),
                            vars = allVars, factorVars = catVars) %>%
@@ -820,32 +1022,29 @@ library(optmatch) # for optimal matching
 # library(Matching) # for genetic matchin
 # library(rgenoud) # for genetic matchin
 
-select_vars <-  c("time", "gender", "age", "living_status",
-                  # "marital", "educ", "housing_type",
-                  "risk_score")
+select_vars <-  c("time", "gender.r1", "age.r1", "living_status.r1",
+                  # "marital.r1", "educ.r1", "housing_type.r1",
+                  "risk_score.r1")
 temp <- temp[complete.cases(temp[, select_vars]),]
-temp$marital <- to_factor(temp$marital)
-temp$educ <- to_factor(temp$educ)
-temp$living_status <- to_factor(temp$living_status)
-temp$housing_type <- to_factor(temp$housing_type)
-temp$gender <- as.factor(temp$gender)
-temp$Drug_use <- as.factor(temp$Drug_use)
-# matched.out <- matchit(time ~ gender + age + marital + educ + living_status + housing_type + risk_score,
-#                  data = temp, method = "optimal"
-#                  # , distance='mahalanobis'
-#                  )
+temp$marital.r1 <- to_factor(temp$marital.r1)
+temp$educ.r1 <- to_factor(temp$educ.r1)
+temp$living_status.r1 <- to_factor(temp$living_status.r1)
+temp$housing_type.r1 <- to_factor(temp$housing_type.r1)
+temp$gender.r1 <- as.factor(temp$gender.r1)
+temp$Drug_use.r1 <- as.factor(temp$Drug_use.r1)
 temp$n <- NULL
 temp_ <- temp %>% add_count(member_id) %>% filter((n == 1 & time == 0) | (n == 2 & time == 1)) # remove pre-test of those with both pre & post
-matched.out <- matchit(time ~ gender + 
-                         age +
-                         housing_type +
-                         marital + educ + living_status +
+matched.out <- matchit(time ~ gender.r1 + 
+                         age.r1 +
+                         housing_type.r1 +
+                         marital.r1 + educ.r1 + living_status.r1 +
                          yearmonth +
-                         FS_total + SAR_total
-                       + Hospital + Aeservices + Drug_use
+                         FS_total.r1 + SAR_total.r1
+                       + Hospital.r1 + Aeservices.r1 + Drug_use.r1
                        # risk_score
                        ,
-                       data = temp_, method = "optimal"
+                       data = temp_
+                       , method = "optimal"
                        # , caliper = 0.25
                        # , distance='mahalanobis'
 )
@@ -863,7 +1062,7 @@ temp_t0 <- temp %>% add_count(member_id) %>% filter(n == 2 & time == 0) # only T
 temp_t0$covid <- 0
 temp_t0$int <- 1
 temp_t0 <- merge(temp_t0, df_matched[c("member_id", 
-                                       "distance",
+                                       "distance", # comment this out for mahalanobis distance
                                        "weights", "subclass")], 
                  by=c("member_id"), all.x = TRUE)
 df_matched <- rbind(as.data.frame(df_matched), temp_t0)
@@ -871,13 +1070,13 @@ df_matched$member_id_old <- df_matched$member_id
 df_matched$member_id <- df_matched$subclass
 
 library(cobalt)
-v <- data.frame(old = c("distance", "gender_M", "age", 
-                        "housing_type_Public Housing", "housing_type_Subsidized Housing", "housing_type_Private Housing", 
-                        "housing_type_Homes for the Aged", "housing_type_Others (e.g. Temporary Housing)",
-                        "marital_Single", "marital_Married", "marital_Widowed", "martial_Divorced/Separated", 
-                        "educ_No Education", "educ_Primary", "educ_Secondary", "educ_Tertiary", 
-                        "living_status_Living Alone", "living_status_Living with Spouse", "living_status_Living with Children", "living_status_Living with Spouse and Children", "living_status_Living with Others(e.g. Domestic Helper)",
-                        "yearmonth",  "FS_total", "SAR_total", "Hospital", "Aeservices", "Drug_use_1", "Drug_use_2", "Drug_use_3"
+v <- data.frame(old = c("distance", "gender.r1_M", "age.r1", 
+                        "housing_type.r1_Public Housing", "housing_type.r1_Subsidized Housing", "housing_type.r1_Private Housing", 
+                        "housing_type.r1_Homes for the Aged", "housing_type.r1_Others (e.g. Temporary Housing)",
+                        "marital.r1_Single", "marital.r1_Married", "marital.r1_Widowed", "martial_Divorced/Separated", 
+                        "educ.r1_No educ.r1ation", "educ.r1_Primary", "educ.r1_Secondary", "educ.r1_Tertiary", 
+                        "living_status.r1_Living Alone", "living_status.r1_Living with Spouse", "living_status.r1_Living with Children", "living_status.r1_Living with Spouse and Children", "living_status.r1_Living with Others(e.g. Domestic Helper)",
+                        "yearmonth",  "FS_total.r1", "SAR_total.r1", "Hospital.r1", "Aeservices.r1", "Drug_use.r1_1", "Drug_use.r1_2", "Drug_use.r1_3"
 ),
 new = c("Distance", "Sex", "Age", 
         "Housing type - public housing", "Housing type - subsidized housing", "Housing type - private housing", 
@@ -954,7 +1153,6 @@ love.plot(matched.out, thresholds = c(m = .1), colors = c("grey", "black"), star
 #                                               legend.text = element_text(size=12),
 #                                               axis.text.x = element_text(size=12),
 #                                               axis.text.y = element_text(size=12))
-
 
 # generate a table of PSM results ----
 complete_cases <- function(df, var){
