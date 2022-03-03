@@ -71,6 +71,21 @@ create_variables <- function(df){
 
 df <- cbind(df, create_variables(df))
 
+# HGS asymmetry ----
+df$hgs_l <- pmax(df$hgs1, df$hgs2) # better hand-grip strength of left hand
+df$hgs_r <-  pmax(df$hgs3, df$hgs4) # better hand-grip strength of right hand
+df$hgs_l <- ifelse(df$hgs_l == 0, NA, df$hgs_l) # set to NA if zero
+df$hgs_r <- ifelse(df$hgs_r == 0, NA, df$hgs_r)# set to NA if zero
+
+df$hgs_ratio <- pmax(df$hgs_l, df$hgs_r)/pmin(df$hgs_l, df$hgs_r)
+df$hgs_asym <- ifelse(df$hgs_ratio > 1.1, 1, 0)
+df$hgs_l <- NULL
+df$hgs_r <- NULL
+
+# handgrip AWGS 2019 ----
+df$hgs_2 <- ifelse(is.na(df$hgs) | is.na(df$gender), NA, 
+                   ifelse(df$hgs >= 28 & df$gender == "M" , 1, 
+                          ifelse(df$hgs >= 18 & df$gender == "F" , 1, 0)))
 # from long to wide ----
 dfwide <- reshape(df,
                   idvar = c("sopd"), # this line is to keep variables
@@ -115,8 +130,8 @@ dfwide$dm.0 <- ifelse(dfwide$md.0 == 0, 0, # md3 is a nested question on chronic
                       ifelse(dfwide$md3.0 >= 1, 1, 0)) 
 dfwide$chronicpain.0 <- ifelse(dfwide$msd.0 == 0, 0, # msd1 is a nested question on chronic pain for those with musculoskeletal and connective tissue diseases 
                                ifelse(dfwide$msd1.0 >= 1, 1, 0)) 
-dfwide$inflam.0 <- ifelse(dfwide$msd.0 == 0, 0, # msd2 is a nested question on chronic pain for those with musculoskeletal and connective tissue diseases 
-                          ifelse(dfwide$msd2.0 >= 1, 1, 0)) 
+dfwide$skeletal.0 <- ifelse(dfwide$msd.0 == 0, 0, # msd2 is a nested question on "inflammatory conditions" for those with musculoskeletal and connective tissue diseases 
+                          ifelse(dfwide$msd.0 >= 1, 1, 0)) 
 
 dfwide$female <- ifelse(dfwide$gender.0 == "F", 1,
                     ifelse(dfwide$gender.0 == "M", 0, NA))
@@ -126,6 +141,7 @@ xLev = names(table(dfwide$work.0))[order(table(dfwide$work.0), decreasing = TRUE
 dfwide$work.0 = factor(dfwide$work.0, levels=xLev)
 xLev = names(table(dfwide$marriage.0))[order(table(dfwide$marriage.0), decreasing = TRUE)]
 dfwide$marriage.0 = factor(dfwide$marriage.0, levels=xLev)
+
 
 # restrict sample and code dropouts ----
 dfwide$dropout_t1 <- ifelse(!(is.na(dfwide$gender.0) |  # 477 at T1
@@ -187,14 +203,16 @@ dfwide <- dfwide %>% filter(!(is.na(gender.0) |
 
 ### main analysis for draft ----
 # descriptive statistics ----
-allVars <- c("age.0", "gender.0", "cd.0", "ht2.0", "dyslip.0", "chronicpain.0", "dm.0", "inflam.0", "medication.0", "edu.0", "work.0", "marriage.0")
-catVars <- c("gender.0", "work.0", "marriage.0")
+allVars <- c("age.0", "gender.0", "cd.0", "ht2.0", "dyslip.0", "dm.0", "skeletal.0", "chronicpain.0", "medication.0", "edu.0", "work.0", "marriage.0")
+catVars <- c("gender.0",
+             "ht2.0", "dyslip.0", "chronicpain.0", "dm.0", "skeletal.0",
+             "work.0", "marriage.0")
 tableone::CreateTableOne(data =  dfwide, 
                          # strata = c(""),
                          vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
-allVars <- c("age.0", "gender.0", "cd.0", "ht2.0", "dyslip.0", "chronicpain.0", "dm.0", "inflam.0", "medication.0", "edu.0", "work.0", "marriage.0",
+allVars <- c("age.0", "gender.0", "cd.0", "ht2.0", "dyslip.0", "chronicpain.0", "dm.0", "skeletal.0", "medication.0", "edu.0", "work.0", "marriage.0",
              "sar.0", "hgs.0", "moca.0")
 catVars <- c("gender.0", "work.0", "marriage.0")
 tableone::CreateTableOne(data =  dfwide0, 
@@ -345,7 +363,8 @@ cor_matrix %>% clipr::write_clip()
 
 # regression results ----
 table <- combine_tables(NULL, 
-                        show_CI = TRUE, lm_robust = TRUE,
+                        # show_CI = TRUE, lm_robust = TRUE,
+                        aic =  TRUE, 
                         lm(sar.0~ 1+age_group.0+female+cd.0+edu.0+moca.0, data = dfwide),
                         lm(sar.1~ 1+age_group.0+female+cd.0+edu.0+sar.0+moca.0, data = dfwide),
                         lm(sar.1~ 1+age_group.0+female+cd.0+edu.0+sar.0+moca.1, data = dfwide),
@@ -355,8 +374,9 @@ table <- combine_tables(NULL,
 )
 # standardized
 table <- combine_tables(NULL, 
-                        show_CI = TRUE,
+                        # show_CI = TRUE,
                         decimal_places = 2, lm_robust = TRUE,
+                        aic =  TRUE, 
                         lm(scale(sar.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0), data = dfwide),
                         lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+scale(moca.0), data = dfwide),
                         lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+scale(moca.1), data = dfwide),
@@ -364,9 +384,11 @@ table <- combine_tables(NULL,
                         lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+mci.0, data = dfwide),
                         lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+mci.1, data = dfwide)
 )
+table %>% clipr::write_clip()
 
 table <- combine_tables(NULL,
-                        show_CI = TRUE, lm_robust = TRUE,
+                        # show_CI = TRUE, lm_robust = TRUE,
+                        aic =  TRUE, 
                         lm(hgs.0~ 1+age_group.0+female+cd.0+edu.0+moca.0, data = dfwide),
                         lm(hgs.1~ 1+age_group.0+female+cd.0+edu.0+hgs.0+moca.0, data = dfwide),
                         lm(hgs.1~ 1+age_group.0+female+cd.0+edu.0+hgs.0+moca.1, data = dfwide),
@@ -376,8 +398,9 @@ table <- combine_tables(NULL,
 )
 # standardized
 table <- combine_tables(NULL,
-                        show_CI = TRUE,
+                        # show_CI = TRUE,
                         decimal_places = 2, lm_robust = TRUE,
+                        aic =  TRUE, 
                         lm(scale(hgs.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0), data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+scale(moca.0), data = dfwide),
                         lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+scale(moca.1), data = dfwide),
@@ -387,8 +410,9 @@ table <- combine_tables(NULL,
 )
 
 table <- combine_tables(NULL,
-                        show_CI = TRUE,
-                        exponentiate = TRUE, lm_robust = TRUE,
+                        # show_CI = TRUE, lm_robust = TRUE,
+                        exponentiate = TRUE, 
+                        aic =  TRUE, 
                         lm(moca.0~ 1+age_group.0+female+cd.0+edu.0+sar.0, data = dfwide),
                         lm(moca.1~ 1+age_group.0+female+cd.0+edu.0+moca.0+sar.0, data = dfwide),
                         lm(moca.1~ 1+age_group.0+female+cd.0+edu.0+moca.0+sar.1, data = dfwide),
@@ -407,6 +431,7 @@ table <- combine_tables(NULL,
 table <- combine_tables(NULL,
                         # show_CI = TRUE,
                         exponentiate = TRUE, decimal_places = 2, lm_robust = TRUE,
+                        aic =  TRUE, 
                         lm(scale(moca.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0), data = dfwide),
                         lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+scale(sar.0), data = dfwide),
                         lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+scale(sar.1), data = dfwide),
@@ -422,14 +447,13 @@ table <- combine_tables(NULL,
                         glm(mci.1~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs.1), family = binomial, data =  dfwide)
 )
 
-table %>% clipr::write_clip()
-
 # cox proportional hazards regression
 dfwide$duration <- as.numeric(dfwide$date.1-dfwide$date.0)
 table <- combine_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
-                        show_CI = TRUE,
+                        # show_CI = TRUE,
                         exponentiate = TRUE, 
+                        aic =  TRUE,
                         coxph(Surv(duration, mci.1) ~1+age_group.0+female+cd.0+edu.0+mci.0+sar.0, data =  dfwide),
                         coxph(Surv(duration, mci.1)~1+age_group.0+female+cd.0+edu.0+mci.0+sar.1, data =  dfwide),
                         coxph(Surv(duration, mci.1)~1+age_group.0+female+cd.0+edu.0+mci.0+hgs.0, data =  dfwide),
@@ -440,6 +464,7 @@ table <- combine_tables(NULL,
                         # adjusted_r2 = FALSE, show_p = TRUE, 
                         # show_CI = TRUE,
                         exponentiate = TRUE,  decimal_places = 2,
+                        # aic =  TRUE, 
                         coxph(Surv(duration, mci.1) ~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(sar.0), data =  dfwide),
                         coxph(Surv(duration, mci.1)~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(sar.1), data =  dfwide),
                         coxph(Surv(duration, mci.1)~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs.0), data =  dfwide),
@@ -454,6 +479,68 @@ survminer::ggcoxzph(cox.zph(coxph(Surv(duration, mci.1)~1+age_group.0+female+cd.
 
 coxph(Surv(duration, mci.1)~1+age_group.0+female+cd.0+edu.0+mci.0+sar.0, data =  dfwide, robust = TRUE) %>% summary()
 coxphw::coxphw(Surv(duration, mci.1)~1+age_group.0+female+cd.0+edu.0+mci.0+sar.0, template = "PH", data =  dfwide, robust = TRUE) %>% summary()
+
+# regression with HGS asymmetry ----
+# standardized
+table <- combine_tables(NULL,
+                        show_CI = TRUE,
+                        decimal_places = 2, 
+                        # lm_robust = TRUE,
+                        lm(scale(sar.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+hgs_asym.1, data = dfwide),
+                        lm(scale(sar.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(sar.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(sar.0)+scale(hgs_ratio.1), data = dfwide)
+)
+# table <- rbind(table[table[[1]] %!in% "hgs_asym.0",], table[table[[1]] %in% "hgs_asym.0",])
+
+# standardized
+table <- combine_tables(NULL,
+                        show_CI = TRUE,
+                        decimal_places = 2, 
+                        # lm_robust = TRUE,
+                        lm(scale(hgs.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+hgs_asym.1, data = dfwide),
+                        lm(scale(hgs.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(hgs.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs.0)+scale(hgs_ratio.1), data = dfwide)
+)
+
+# standardized
+table <- combine_tables(NULL,
+                        show_CI = TRUE,
+                        exponentiate = TRUE, decimal_places = 2, 
+                        # lm_robust = TRUE,
+                        lm(scale(moca.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+hgs_asym.0, data = dfwide),
+                        lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+hgs_asym.1, data = dfwide),
+                        lm(scale(moca.0)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+scale(hgs_ratio.0), data = dfwide),
+                        lm(scale(moca.1)~ 1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(moca.0)+scale(hgs_ratio.1), data = dfwide),
+                        
+                        glm(mci.0~1+age_group.0+female+scale(cd.0)+scale(edu.0)+hgs_asym.0, family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.0+female+scale(cd.0)+scale(edu.0)+hgs_asym.0, family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+hgs_asym.1, family = binomial, data =  dfwide),
+                        glm(mci.0~1+age_group.0+female+scale(cd.0)+scale(edu.0)+scale(hgs_ratio.0), family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs_ratio.0), family = binomial, data =  dfwide),
+                        glm(mci.1~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs_ratio.1), family = binomial, data =  dfwide)
+)
+
+# cox proportional hazards regression
+dfwide$duration <- as.numeric(dfwide$date.1-dfwide$date.0)
+# standardized
+table <- combine_tables(NULL,
+                        # adjusted_r2 = FALSE, show_p = TRUE, 
+                        show_CI = TRUE,
+                        exponentiate = TRUE,  decimal_places = 3,
+                        coxph(Surv(duration, mci.1) ~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+hgs_asym.0, data =  dfwide),
+                        coxph(Surv(duration, mci.1)~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+hgs_asym.1, data =  dfwide),
+                        coxph(Surv(duration, mci.1)~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs_ratio.0), data =  dfwide),
+                        coxph(Surv(duration, mci.1)~1+age_group.0+female+scale(cd.0)+scale(edu.0)+mci.0+scale(hgs_ratio.1), data =  dfwide)
+)
+
 
 # variance analysis ----
 model <- lm(scale(sar.0)~ scale(moca.0), data = dfwide)
@@ -535,5 +622,6 @@ test_var(model01, "sar", "sar", "moca", center = median)  %>% t() %>% clipr::wri
 test_var(model01, "hgs", "hgs", "moca", center = median)  %>% t() %>% clipr::write_clip()
 
 test_var(model01, "sar", "hgs", "moca", center = median, sign1 = "<", sign2 = "<")  %>% t() %>% clipr::write_clip()
+
 
 
