@@ -28,6 +28,20 @@ df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 df$pase_c_11_1 <- ifelse(df$pase_c_11 == 0 , 0, df$pase_c_11_1)
 df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
 
+# extract age ----
+wbswide <-  reshape(data=wbs, idvar=  "member_id",
+                    sep = ".r", 
+                    timevar = "Round",
+                    direction="wide")
+df <- merge(df, wbswide[, c("member_id", "dob.r1", "gender.r1")], # extract item matched by member ID
+            by=c("member_id"), all.x = TRUE)
+
+df$age <- floor(interval(df$dob.r1, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
+
+df$age_group <- recode_age(df$age, age_labels = c("50-59", "60-69", "70-79", "80+"))
+df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
+names(df)[names(df)=="gender.r1"] <- "gender"
+
 # total score of diet items ----
 scoring <- function(df){
   reverse_matrix_diet <- matrix_diet_[c(1, 2)] # high-sugar/high-fat snacks & processed/canned foods
@@ -46,7 +60,7 @@ scoring <- function(df){
 df <- cbind(df, scoring(df))
 
 # restrict sample to age >= 60 ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-11-15'),]
+df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2022-01-31'),]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age >= 60),]
 
@@ -325,7 +339,7 @@ temp$ehealth_eval_timestamp.0 <- as.Date(temp$ehealth_eval_timestamp.0)
 
 # remove withdrawals
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-withdrawal <- readxl::read_xlsx("data_WBS_enrol_status_2021-11-27_Overall.xlsx", sheet  = "Sheet 1"
+withdrawal <- readxl::read_xlsx("data_WBS_enrol_status_2022-01-29_Overall.xlsx", sheet  = "Sheet 1"
                                         , col_names = TRUE, guess_max = 20000)
 setwd(sprintf("~%s/ehealth", setpath))
 withdrawal <- withdrawal %>% filter(Status == "Withdrew")
@@ -337,8 +351,9 @@ temp$nursing_target <- ifelse(temp$duration > 90, 6+floor((temp$duration-90)/30)
 
 temp$target_met <- ifelse(temp$f2f_telemode_num >= (temp$nursing_target-0), 1, 0)
 
-temp %>%   group_by(gender, age_group) %>%
+temp %>% group_by(gender, age_group) %>%
   summarise_at(vars(target_met), list(~mean(., na.rm=TRUE), sd = sd(., na.rm=TRUE))) %>% clipr::write_clip()
+summ(temp$target_met)
 
 temp1 <- temp[, c("duration", "f2f_num", "age", "ehealth_eval_timestamp")]
 temp1$type <- "Face-to-face"
@@ -375,7 +390,6 @@ temp1 <- temp1[as.Date(temp1$ehealth_eval_timestamp) <= as.Date('2021-08-31'),]
 temp <- df
 temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-10-31'),]
 temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
-
 
 get_results_by <- function(data, grp, var){
  table <- 

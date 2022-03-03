@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2021-12-13_1127.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-02-14_1652.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -122,7 +122,7 @@ wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2021-11-20.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-01-29.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
@@ -229,16 +229,16 @@ c('一次', '半日', 'l') = 1;
 '6日' = 6
 ")
 wbs$Aeservices_day  <- car::recode(wbs$Aeservices_day, "
-c('一', '一次', '一次。', '〉1', '跌傷', '1次 耳水不平衡', '1次', '1係', 'I', 'l', 'I ') = 1;
+c('一', '一次', '一次。', '〉1', '至少一次', '跌傷', '1次 耳水不平衡', '1次', '1係', 'I', 'l', 'I ') = 1;
 '1-2' = 1.5;
-'2次' = 2;
+c('2次', '多次') = 2;
 '2-3' = 2.5;
-c('多次', '3次') = 3;
+c('3次') = 3;
 c('3-4次', '3-4') = 3.5;
 '4次' = 4;
 '超過4次' = 5;
 '5-6' = 5.5;
-c(' 6', '64') = 6;
+c(' 6', '64', '6次') = 6;
 '8～10' = 9
 ")
 Sys.setlocale(locale =  "eng") 
@@ -269,7 +269,7 @@ wbswide <-  reshape(data=wbs, idvar=  "member_id",
                     direction="wide")
 
 df$member_id <- toupper(df$member_id)
-df <- merge(df, wbswide[, c("member_id", "dob.r1")], # extract item matched by member ID
+df <- merge(df, wbswide[, c("member_id", "dob.r1", "gender.r1")], # extract item matched by member ID
             by=c("member_id"), all.x = TRUE)
 
 df$age <- floor(interval(df$dob.r1, df$ehealth_eval_timestamp) / duration(num = 1, units = "years")) # https://stackoverflow.com/a/27363833
@@ -278,9 +278,6 @@ df$age_group <- recode_age(df$age, age_labels = c("50-59", "60-69", "70-79", "80
 df$age_group <- relevel(as.factor(df$age_group), ref = "60-69")
 
 df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
-df$dob.r1 <- NULL
-df$age <- NULL
-df$age_group <- NULL
 
 # wbs2$risk_score2 <- wbs2$Age_score + wbs2$Heart_score + wbs2$Income_cssa_score + wbs2$FS_score + wbs2$AMIC_score + wbs2$Self_rated_health_score + wbs2$Satisfaction_score + wbs2$Happiness_score + wbs2$Hospital_score + wbs2$Drug_use_score
 
@@ -291,6 +288,10 @@ source("rename_interviewer.R", encoding="utf-8")
 df$interviewer_name <- rename_interviewer(df$interviewer_name)
 
 # save data ----
+df$dob.r1 <- NULL
+df$gender.r1 <- NULL
+df$age <- NULL
+df$age_group <- NULL
 setwd(sprintf("~%s/ehealth", setpath))
 saveRDS(df, "ehealth_data.rds")
 saveRDS(wbs, "wbs_data.rds")
