@@ -467,7 +467,7 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
   return(get(paste0(myvector, collapse = ""), parent.frame() )) # evaluating in parent.frame()
 }
 
-gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3, lm_robust = FALSE){ 
+gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3, lm_robust = FALSE, aic = FALSE){ 
   require(lmerTest)
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
   row_count <- 1
@@ -495,11 +495,15 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     table[row_count, col_count] <-  n
     row_count <- row_count + 1
     
-    if(adjusted_r2){
+    if(adjusted_r2 & !(aic)){
       adj_r2 <- iferror(1 - ((summary(fit)$deviance/-2)-(length(fit$coeff)-1)) / (summary(fit)$null.deviance/-2), NA)
       adj_r2 <- round_format(adj_r2, decimal_places)
       table[row_count, 1] <- "Adjusted R2"
       table[row_count, col_count] <-  adj_r2
+    } else if (aic){
+      aic <-  iferror(round_format(AIC(fit), decimal_places), NA)
+      table[row_count, 1] <- "AIC"
+      table[row_count, col_count] <- aic
     } else {
       r2 <- iferror(1 - ((summary(fit)$deviance/-2)) / (summary(fit)$null.deviance/-2), NA)
       r2 <- round_format(r2, decimal_places)
@@ -514,9 +518,15 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     table[row_count, col_count] <-  n
     row_count <- row_count + 1
     
-    concordance <- iferror(round_format(summary(fit)$concordance[[1]], decimal_places), NA)
-    table[row_count, 1] <- "Concordance"
-    table[row_count, col_count] <-  concordance
+    if (aic){
+      aic <-  iferror(round_format(AIC(fit), decimal_places), NA)
+      table[row_count, 1] <- "AIC"
+      table[row_count, col_count] <- aic
+    } else {
+      concordance <- iferror(round_format(summary(fit)$concordance[[1]], decimal_places), NA)
+      table[row_count, 1] <- "Concordance"
+      table[row_count, col_count] <-  concordance
+    }
     
     row_count <- row_count + 1
     
@@ -526,10 +536,14 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
     table[row_count, col_count] <-  n
     row_count <- row_count + 1
     
-    if(adjusted_r2){
+    if(adjusted_r2 & !(aic)){
       adj_r2 <- iferror(round_format(summary(fit)$adj.r.squared, decimal_places), NA)
       table[row_count, 1] <- "Adjusted R2"
       table[row_count, col_count] <-  adj_r2
+    } else if (aic){
+      aic <-  iferror(round_format(AIC(fit), decimal_places), NA)
+      table[row_count, 1] <- "AIC"
+      table[row_count, col_count] <- aic
     } else {
       r2 <- iferror(round_format(summary(fit)$r.squared, decimal_places), NA)
       table[row_count, 1] <- "R2"
@@ -608,18 +622,18 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
   return(table)
 }
 
-combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = TRUE, decimal_places = 3, lm_robust = FALSE){
+combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = FALSE, exponentiate = FALSE, decimal_places = 3, lm_robust = FALSE, aic = FALSE){
   dep_var_saved <- dep_var
   for (i in 1:length(list(...))){
     if (is.null(table) & i == 1){
-      table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
+      table <- gen_reg(list(...)[[i]], dep_var = dep_var, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust, aic) 
       next
     }
     if (is.null(dep_var_saved)){
-      new_table <- gen_reg(list(...)[[i]], dep_var = NULL, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
+      new_table <- gen_reg(list(...)[[i]], dep_var = NULL, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust, aic) 
       dep_var <- names(new_table)[2]
     } else {
-      new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust) 
+      new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust, aic) 
     }
     dep_vars <- names(table)
     names(table) <- c("X1",rep(2:ncol(table)))
