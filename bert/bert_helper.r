@@ -20,14 +20,14 @@ graph.plot <- function(data, label=NULL){
   
   # flatten the data and make sure it's numeric
   data = as.numeric( unlist( data ));
-
+  
   # draw the plot
   plot(data, pch=21, bg="pink", col="red", main=label );
   lines( lowess( data ));
-
+  
   # we're done with the graphics device, so shut it off for now
   dev.off();
-
+  
   # this is a convenient return value for the calling cell
   T;
 }
@@ -83,4 +83,43 @@ getQuote <- function(stock, date = Sys.time()){
   suppressWarnings(quantmod::getSymbols(stock, src = "yahoo", from = date, to = date+as.difftime(1, unit="days"), auto.assign = TRUE))
   price <- as.numeric(get(stock)[nrow(get(stock)), sprintf("%s.Close", stock)])
   return(price)
+}
+
+gen_rr <- function(TMRED, rr, linear_cutoff, return_x = FALSE){
+  lagpad <- function(x, k) {
+    if (k>0) {
+      return (c(rep(NA, k), x)[1 : length(x)] );
+    }
+    else {
+      return (c(x[(-k+1) : length(x)], rep(NA, -k)));
+    }
+  }
+  
+  lower <- 10
+  upper <- 100
+  
+  table <- data.frame(x = seq(lower, upper, 0.1))
+  
+  table$power <- pmax(0, as.numeric(rownames(table)) - (which(table$x > TMRED)[1]-1))
+  table$rr <- ifelse(table$x <= TMRED, 1, 
+                     ifelse(table$x <= linear_cutoff, 
+                            (rr^(1/5/10))^table$power, 
+                            NA))
+  
+  if(any(table$rr %in% NA)){ # extrapolate if there's any NA
+    start <- min(which(table$rr %in% NA))
+    end <- length(table$x)
+    x <- table$x[(start-2):(start-1)]
+    y <- table$rr[(start-2):(start-1)]
+    # table$rr[start:end] <- predict(lm(y~x), table[start:end,])
+    fit <- .lm.fit(cbind(rep(1, length(x)), x), y)
+    table$rr[start:end] <- fit$coefficients[1] + fit$coefficients[2]* table$x[start:end]
+    
+  }
+  
+  if(return_x){
+    return(table$x)
+  } else {
+    return(table$rr)
+  }
 }
