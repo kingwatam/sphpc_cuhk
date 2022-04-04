@@ -87,6 +87,7 @@ rm(confirmed, deaths, recovered, confirmed_long_hk, deaths_long_hk, recovered_lo
 # create daily new cases ----
 df$new_confirmed <- df$confirmed - lag(df$confirmed, k = 1)
 df$new_confirmed[1] <- 0
+df$new_confirmed <- ifelse(df$new_confirmed < 0, 0, df$new_confirmed)
 
 df$new_deaths <- df$deaths - lag(df$deaths, k = 1)
 df$new_deaths[1] <- 0
