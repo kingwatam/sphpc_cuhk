@@ -609,7 +609,7 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
       if (show_CI){
         table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
       }
-    } else if (show_CI & !(class(fit)[1] %in% c("glm", "coxph"))){
+    } else if (show_CI){
       table[row_count, col_count] <-  paste0(round_format(lowerCI, decimal_places), ", ", round_format(upperCI, decimal_places))
     } else {
       table[row_count, col_count] <-  starred_p(p_value, decimal_places, beta)
