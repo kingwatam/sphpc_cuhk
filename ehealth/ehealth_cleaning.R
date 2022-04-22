@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-02-14_1652.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-04-08_1121.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -115,14 +115,14 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs0 <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2021-09-15.xlsx", sheet  = "Raw data"
+wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2022-02-28.xlsx", sheet  = "Raw data"
 ) # latest WBS all data
-# latest WBS all data
+
 wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-01-29.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-04-09.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
@@ -223,13 +223,14 @@ wbs <- convert2NA(wbs, "")
 
 Sys.setlocale(locale =  "cht") 
 wbs$Hospital_day <- car::recode(wbs$Hospital_day, "
-c('一次', '半日', 'l') = 1;
+c('一次', '半日', 'l', '1次') = 1;
+'1-2' = 1.5;
 '2次' = 2;
 '三次' = 3;
 '6日' = 6
 ")
 wbs$Aeservices_day  <- car::recode(wbs$Aeservices_day, "
-c('一', '一次', '一次。', '〉1', '至少一次', '跌傷', '1次 耳水不平衡', '1次', '1係', 'I', 'l', 'I ') = 1;
+c('一', '一次', '一次。', '〉1', '至少一次', '跌傷', '1次 耳水不平衡', '1次', '1係', 'I', 'l', 'I ', 'l 次', '魚骨') = 1;
 '1-2' = 1.5;
 c('2次', '多次') = 2;
 '2-3' = 2.5;
