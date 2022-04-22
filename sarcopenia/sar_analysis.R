@@ -292,7 +292,9 @@ get_plot_main <- function(df, x, y, xlab, ylab, jitter_w = 0, jitter_h = 0,
     # geom_hline(yintercept = yintercept) + geom_vline(xintercept = xintercept) +
     theme(text = element_text(size=rel(text_size)),
           strip.text.x = element_text(size=rel(text_size*0.85)),
-          strip.text.y = element_text(size=rel(text_size*0.85)))
+          strip.text.y = element_text(size=rel(text_size*0.85)), 
+          axis.text.x = element_text(size=rel(text_size*1)), 
+          axis.text.y = element_text(size=rel(text_size*1)))
   return(plot)
 }
 
@@ -308,20 +310,20 @@ get_plot <- function(df, x, y, jitter_w = 0, jitter_h = 0,
 # MoCA vs SARC-F vs HGS scatterplots (different x & y) ----
 plot1 <- get_plot(dfwide, 
                   x = "moca.0", y = "sar.0",
-                  jitter_w = 0.25, jitter_h = 0.25)
+                  jitter_w = 0.25, jitter_h = 0.25, text_size = 4.4)
 plot2 <- get_plot(dfwide, 
                   x = "moca.1", y = "sar.1",
-                  jitter_w = 0.25, jitter_h = 0.25)
+                  jitter_w = 0.25, jitter_h = 0.25, text_size = 4.4)
 plot3 <- get_plot(dfwide, 
                   x = "moca.0", y = "hgs.0",
-                  jitter_w = 0.25, jitter_h = 0)
+                  jitter_w = 0.25, jitter_h = 0, text_size = 4.4)
 plot4 <- get_plot(dfwide, 
                   x = "moca.1", y = "hgs.1",
-                  jitter_w = 0.25, jitter_h = 0)
+                  jitter_w = 0.25, jitter_h = 0, text_size = 4.4)
 scatterplots <- plot1+plot2+plot3+plot4 
 print(scatterplots)
 setwd(sprintf("~%s/sarcopenia/draft/charts", setpath))
-ggsave("scatter.png", plot = scatterplots, height =  28, width =  50, units = "cm", dpi = 600)
+ggsave("scatter_final.png", plot = scatterplots, height =  28, width =  50, units = "cm", dpi = 600)
 dev.off()
 
 plot5 <- get_plot(dfwide, 
