@@ -104,5 +104,6 @@ library(ggplot2)
 ggplot(df, aes(x=as.Date(date), y = new_confirmed)) + 
   geom_bar(stat='identity', color = "grey", alpha = 0.2) +
   geom_bar(aes(x=as.Date(date), y = new_deaths), stat='identity', color = "dark grey") +
-  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%b %Y") +
-  theme(axis.text.x=element_text(angle=50, vjust = 1, hjust = 1))
+  scale_y_log10(breaks=c(1, 10, 100, 1000, 10000)) +
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%Y-%m") +
+  theme(axis.text.x=element_text(angle=60, vjust = 1, hjust = 1)) 
