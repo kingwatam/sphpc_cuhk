@@ -101,9 +101,13 @@ saveRDS(df, "covid_data_hk.rds")
 
 # plot confirmed & deaths ----
 library(ggplot2)
-ggplot(df, aes(x=as.Date(date), y = new_confirmed)) + 
+library(gg.gap)
+
+plot <- ggplot(df, aes(x=as.Date(date), y = new_confirmed)) + 
   geom_bar(stat='identity', color = "grey", alpha = 0.2) +
   geom_bar(aes(x=as.Date(date), y = new_deaths), stat='identity', color = "dark grey") +
-  scale_y_log10(breaks=c(1, 10, 100, 1000, 10000)) +
-  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%Y-%m") +
-  theme(axis.text.x=element_text(angle=60, vjust = 1, hjust = 1)) 
+  # scale_y_log10(breaks=c(1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000))
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 month", date_labels="%Y-%m")  +
+  theme(axis.text.x=element_text(angle=60, vjust = 1, hjust = 1))
+
+gg.gap(plot = plot, ylim = c(0, 80000), segments = c(160, 1000), tick_width = c(20, 10000)) 
