@@ -18,6 +18,16 @@ setwd(sprintf("~%s/ehealth", setpath))
 df <- readRDS("ehealth_data.rds")
 wbs <- readRDS("wbs_data.rds")
 
+wbs$prefrail <- ifelse(wbs$FS_total %in% c(1:5), 1, 0)
+wbs$sarcopenic <- ifelse(wbs$SAR_total %in% c(4:10), 1, 0)
+wbs$poor_health <- ifelse(wbs$Self_rated_health %in% 1, 1, 0)
+wbs$memory_complaints <- ifelse(wbs$AMIC %in% c(1:2), 1, 0)
+wbs$incontinent <- ifelse(wbs$Incontinence %in% c(1:2), 1, 0)
+wbs$polypharmacy <- ifelse(wbs$Drug_use %in% 3, 1, 0)
+wbs$low_wellbeing <- ifelse(wbs$Satisfaction %in% c(1:3) |
+                              wbs$Meaning_of_life %in% c(1:3) |
+                              wbs$Happiness %in% c(0:3), 1, 0)
+
 df %>% dplyr::select(starts_with("amic") & ends_with(sprintf("%s", 1:5))) %>% colnames(.) -> amic_
 df %>% dplyr::select(starts_with("self_efficacy_")) %>% colnames(.) -> self_efficacy_ 
 df %>% dplyr::select(starts_with("pase_c_") & ends_with("score")) %>% colnames(.) -> pase_c_
@@ -27,6 +37,9 @@ df %>% dplyr::select(starts_with("eq5d")) %>% colnames(.) -> eq5d_
 
 df$pase_c_11_1 <- ifelse(df$pase_c_11 == 0 , 0, df$pase_c_11_1)
 df$pase_c_11 <- ifelse(df$pase_c_11_1 == 0 , 0, df$pase_c_11)
+
+wbs$age_group <- recode_age(wbs$Age, age_labels = c("50-59", "60-69", "70-79", "80+"))
+wbs$age_group <- relevel(as.factor(wbs$age_group), ref = "60-69")
 
 # extract age ----
 wbswide <-  reshape(data=wbs, idvar=  "member_id",
@@ -60,7 +73,7 @@ scoring <- function(df){
 df <- cbind(df, scoring(df))
 
 # restrict sample to age >= 60 ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2022-01-31'),]
+df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2022-02-28'),]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age >= 60),]
 
@@ -75,43 +88,59 @@ df$time <- car::recode(df$evaluation_event, "
 val_labels(df$time) <- NULL
 
 # nursing protocol data ----
-temp <- readxl::read_xlsx("nursing protocol _With Raw Data (20200201-20211031)_20211118.xlsm", sheet  = "data"
-                          , col_names = TRUE, guess_max = 1220)
-temp$main <- as.character(temp$main)
+clean_protocol_data <- function(temp){
+   temp$main <- as.character(temp$main)
+   
+   temp$main <- ifelse(temp$main %in% "1.1000000000000001", "1.1", temp$main)
+   
+   gen_itemnum<- function(data){
+     data$main <- zoo::na.locf(data$main)
+     data$sub1[3:nrow(data)] <- zoo::na.locf(data$sub1[3:nrow(data)])
+     data$sub2[4:nrow(data)] <- zoo::na.locf(data$sub2[4:nrow(data)])
+     
+     data$num <- apply(cbind(data$main, data$sub1, data$sub2, data$sub3), 1, 
+                       function(x) paste(x[!is.na(x)], collapse = "."))
+     data <- data %>% select(num, everything())
+     
+     return(subset(data, select = c(num)))
+   }
+   Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
+   temp <- cbind(gen_itemnum(temp), temp)
+   Sys.setlocale(locale =  "eng") # set locale to traditional Chinese
+   
+   temp$num <- ifelse(temp$main %!in% NA, temp$main, temp$num)
+   
+   temp$num[nrow(temp)] <- "protocol_total"
+   temp <- temp %>% filter(stringr::str_count(temp$num, "\\.") <= 1) # count how many dots in string, restrict to major categories
+   temp$num <- ifelse(temp$num %in% "protocol_total", "protocol_total", paste0("protocol_", temp$num))
+   
+   temp <- temp[c(1, 9:ncol(temp))]
+   temp <- as.data.frame(t(temp))
+   names(temp) <- temp[1,]
+   temp <- temp[c(2:(nrow(temp)-1)),] # remove first row
+   temp$member_id <- row.names(temp)
+   temp <- temp %>% select(member_id, everything())
+   
+   temp[,2:ncol(temp)] <- sapply(temp[,2:ncol(temp)], as.numeric)
+   
+   temp <- convert2value(temp, NA, 0)
+   return(temp)
+ }
 
-temp$main <- ifelse(temp$main %in% "1.1000000000000001", "1.1", temp$main)
+data_20211031 <- readxl::read_xlsx("nursing protocol _With Raw Data (20200201-20220228)_20220411.xlsm", sheet  = "data_20211031"
+                          , col_names = TRUE, guess_max = 1221)
+data_20211031 <- clean_protocol_data(data_20211031)
 
-gen_itemnum<- function(data){
-  data$main <- zoo::na.locf(data$main)
-  data$sub1[3:nrow(data)] <- zoo::na.locf(data$sub1[3:nrow(data)])
-  data$sub2[4:nrow(data)] <- zoo::na.locf(data$sub2[4:nrow(data)])
-  
-  data$num <- apply(cbind(data$main, data$sub1, data$sub2, data$sub3), 1, 
-                    function(x) paste(x[!is.na(x)], collapse = "."))
-  data <- data %>% select(num, everything())
-  
-  return(subset(data, select = c(num)))
-}
-Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
-temp <- cbind(gen_itemnum(temp), temp)
-Sys.setlocale(locale =  "eng") # set locale to traditional Chinese
+data_20220228 <- readxl::read_xlsx("nursing protocol _With Raw Data (20200201-20220228)_20220411.xlsm", sheet  = "data_20220228"
+                           , col_names = TRUE, guess_max = 866)
+data_20220228 <- clean_protocol_data(data_20220228)
 
-temp$num <- ifelse(temp$main %!in% NA, temp$main, temp$num)
+temp <- 
+  bind_rows(data_20211031, data_20220228) %>% 
+  group_by(member_id) %>% 
+  summarise_all(sum)
 
-temp$num[nrow(temp)] <- "protocol_total"
-temp <- temp %>% filter(stringr::str_count(temp$num, "\\.") <= 1) # count how many dots in string, restrict to major categories
-temp$num <- ifelse(temp$num %in% "protocol_total", "protocol_total", paste0("protocol_", temp$num))
-
-temp <- temp[c(1, 9:ncol(temp))]
-temp <- as.data.frame(t(temp))
-names(temp) <- temp[1,]
-temp <- temp[c(2:(nrow(temp)-1)),] # remove first row
-temp$member_id <- row.names(temp)
-temp <- temp %>% select(member_id, everything())
-
-temp[,2:ncol(temp)] <- sapply(temp[,2:ncol(temp)], as.numeric)
-
-temp <- convert2value(temp, NA, 0)
+rm(data_20211031, data_20220228)
 
 # summarise protocol data (unique number of times)
 temp1 <- temp
@@ -140,32 +169,36 @@ df <- merge(df, temp[, c("member_id",
 protocol <- temp
 rm(temp)
 
-# # protocol use statistics
-# temp <- df
-# temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-10-31'),]
-# temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
-# 
-# temp %>% group_by(gender, age_group) %>%
-#   summarise_at(vars(!!!syms(paste0("protocol_total", "_b"))), funs(sum(., na.rm=TRUE))) %>% clipr::write_clip()
-# 
-# temp %>% group_by(gender, age_group) %>%
-#   summarise_at(vars(!!!syms(paste0(c("protocol_total"), "_b"))), funs(n = n(), mean = mean(., na.rm=TRUE), sd = sd(., na.rm=TRUE))) %>% clipr::write_clip()
+# protocol use statistics
+temp <- df
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2022-02-28'),]
+temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
+
+temp %>% 
+  # group_by(gender, age_group) %>%
+  summarise_at(vars(!!!syms(paste0(protocol_items, "_b"))), .funs = list(~ sum(., na.rm=TRUE))) %>% clipr::write_clip()
+
+temp %>% group_by(gender, age_group) %>%
+  summarise_at(vars(!!!syms(paste0(c("protocol_total"), "_b"))), .funs =  list(n = ~n(), mean = ~mean(., na.rm=TRUE), sd = ~sd(., na.rm=TRUE))) %>% clipr::write_clip()
 
 
 # nursing mode & freq data ----
-temp <- xlsx::read.xlsx2("No. of nurse session_As of 20210831.xlsx", sheetIndex  = 1
+temp <- xlsx::read.xlsx2("No. of nurse session_As of 20220228.xlsx", sheetIndex  = 1
                          , header = TRUE
 )
 temp <- convert2NA(temp, "")
 names(temp)[names(temp) == "UID"] <- "member_id"
 names(temp)[names(temp) == "Start.date"] <- "nursing_start_date"
-names(temp)[names(temp) == "Status"] <- "status"
+names(temp)[names(temp) == "Status"] <- "nursing_withdrawn"
+names(temp)[names(temp) == "Refused.nursing.support..written.confirmed.by.centers."] <- "nursing_refused"
 names(temp)[names(temp) == "No..of.Face.to.face.Session"] <- "f2f_num"
 names(temp)[names(temp) == "No..of.Tele.mode.Session"] <- "telemode_num"
 names(temp)[names(temp) == "Total"] <- "f2f_telemode_num"
 temp$nursing_start_date <- as.Date(as.numeric(temp$nursing_start_date), origin = "1899-12-30")
 
-temp$status <- ifelse(temp$status == "退出", 1, 0)
+temp$nursing_withdrawn <- ifelse(temp$nursing_withdrawn %in% "退出", 1, 0)
+temp$nursing_refused <- ifelse(temp$nursing_refused %in% "Yes", 1, 0)
+
 df <- merge(df, temp, # extract item matched by member ID
             by=c("member_id"), all.x = TRUE)
 
@@ -181,7 +214,6 @@ df$f2f_pct <- df$f2f_num/df$f2f_telemode_num
 df$telemode_pct <- df$telemode_num/df$f2f_telemode_num
 
 temp <- df
-
 temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
 
 allVars <- c("f2f_num", "telemode_num", 
@@ -191,8 +223,6 @@ tableone::CreateTableOne(data =  temp,
                          strata = c("time"),
                          vars = allVars, test = FALSE) %>%
   print(showAllLevels = TRUE, nonnormal = NULL) %>% clipr::write_clip()
-
-rm(temp)
 
 # nursing assessment data ----
 temp <- readxl::read_xlsx("Assessment_To CUHK_20211005_king.xlsx", sheet  = "20211005_"
@@ -254,11 +284,13 @@ assess <- temp
 rm(temp)
 
 # EMS data ----
-ems <- readxl::read_xlsx("All_event_attendence_2021-10-04.xlsx", sheet  = "Sheet 1"
+ems <- readxl::read_xlsx("80_event_2022-04-07.xlsx", sheet  = "Sheet 1"
                          , col_names = TRUE, guess_max = 3000)
 names(ems)[names(ems)=="uid"] <- "member_id"
 # temp <- readxl::read_xlsx("All_event_2021-10-04.xlsx", sheet  = "Sheet 1"
 #                           , col_names = TRUE, guess_max = 3000)
+
+ems <- ems[as.Date(ems$attendance_in_time) <= as.Date('2022-03-31'),]
 
 ems$Total <-  ifelse(ems$attendance_in_time %!in% NA | ems$attendance_out_time %!in% NA , 1, 0)
 ems$Mental <- ifelse(ems$Mental %in% "Yes" & (ems$attendance_in_time %!in% NA | ems$attendance_out_time %!in% NA), 1, 0)
@@ -278,29 +310,34 @@ ems_wide <- ems %>%
             Social = sum(Social),
             Others = sum(Others),)
 
-df <- merge(df, ems_wide[, c("member_id", "Total", "Mental", "Exercise", "Cognitive", "Nutritional", "Social", "Others")], # extract item matched by member ID
-            by=c("member_id"), all.x = TRUE)
-
-df$Total <-  ifelse(df$Total %in% NA, 0, df$Total)
-df$Mental <-  ifelse(df$Mental %in% NA, 0, df$Mental)
-df$Exercise <-  ifelse(df$Exercise %in% NA, 0, df$Exercise)
-df$Cognitive <-  ifelse(df$Cognitive %in% NA, 0, df$Cognitive)
-df$Nutritional <-  ifelse(df$Nutritional %in% NA, 0, df$Nutritional)
-df$Social <-  ifelse(df$Social %in% NA, 0, df$Social)
-df$Others <-  ifelse(df$Others %in% NA, 0, df$Others)
-
-df$Total2 <- df$Mental + df$Exercise + df$Cognitive + df$Nutritional + df$Social + df$Others
-df$Mental_pct <- df$Mental/df$Total2
-df$Exercise_pct <- df$Exercise/df$Total2
-df$Cognitive_pct <- df$Cognitive/df$Total2
-df$Nutritional_pct <- df$Nutritional/df$Total2
-df$Social_pct <- df$Social/df$Total2
-df$Others_pct <- df$Others/df$Total2
-df$Total2 <- NULL
+merge_ems <- function(data){
+  data <- merge(data, ems_wide[, c("member_id", "Total", "Mental", "Exercise", "Cognitive", "Nutritional", "Social", "Others")], # extract item matched by member ID
+                by=c("member_id"), all.x = TRUE)
+  
+  data$Total <-  ifelse(data$Total %in% NA, 0, data$Total)
+  data$Mental <-  ifelse(data$Mental %in% NA, 0, data$Mental)
+  data$Exercise <-  ifelse(data$Exercise %in% NA, 0, data$Exercise)
+  data$Cognitive <-  ifelse(data$Cognitive %in% NA, 0, data$Cognitive)
+  data$Nutritional <-  ifelse(data$Nutritional %in% NA, 0, data$Nutritional)
+  data$Social <-  ifelse(data$Social %in% NA, 0, data$Social)
+  data$Others <-  ifelse(data$Others %in% NA, 0, data$Others)
+  
+  data$Total2 <- data$Mental + data$Exercise + data$Cognitive + data$Nutritional + data$Social + data$Others
+  data$Mental_pct <- ifelse(is.nan(data$Mental/data$Total2), 0, data$Mental/data$Total2)
+  data$Exercise_pct <- ifelse(is.nan(data$Exercise/data$Total2), 0, data$Exercise/data$Total2)
+  data$Cognitive_pct <- ifelse(is.nan(data$Cognitive/data$Total2), 0, data$Cognitive/data$Total2)
+  data$Nutritional_pct <- ifelse(is.nan(data$Nutritional/data$Total2), 0, data$Nutritional/data$Total2)
+  data$Social_pct <- ifelse(is.nan(data$Social/data$Total2), 0, data$Social/data$Total2)
+  data$Others_pct <- ifelse(is.nan(data$Others/data$Total2), 0, data$Others/data$Total2)
+  data$Total2 <- NULL
+  return(data)
+}
+df <- merge_ems(df)
+wbs <- merge_ems(wbs)
 
 # plot activity/nursing support by duration of participation ----
 get_plot <- function(df, x, y, xlab = NULL, ylab = NULL, legendtitle = NULL, jitter_w = 0, jitter_h = 0, 
-                     yintercept = NULL, xintercept = NULL, text_size = 5.5, group = NULL, legend = TRUE, scatter = FALSE, method = "loess", colour =  "darkgray"){
+                     yintercept = NULL, xintercept = NULL, text_size = 5.5, group = NULL, legend = TRUE, scatter = FALSE, method = "loess", colour =  "darkgray", showCI = TRUE){
   plot <- ggplot(df, aes_string(x=x, y=y, fill = group, colour = group) ) +
     xlab(xlab) + ylab(ylab) + guides(fill=guide_legend(title=legendtitle), color=guide_legend(title=legendtitle))  +
     theme(text = element_text(size=rel(text_size)),
@@ -310,8 +347,8 @@ get_plot <- function(df, x, y, xlab = NULL, ylab = NULL, legendtitle = NULL, jit
   if (!is.numeric(df[[x]])) {plot <- plot + scale_x_date(date_breaks = "3 month", date_labels =  "%b %Y")}
   if (scatter) {plot <- plot + geom_jitter(width = jitter_w, height = jitter_h)}
   if (!legend) {plot <- plot + theme(legend.position="none")}
-  if (is.null(group)) {plot <- plot + geom_smooth(method=method, formula = y ~ x, se=TRUE, na.rm=TRUE, color = colour, fill = colour)} 
-  else {plot <- plot + geom_smooth(method=method, formula = y ~ x, se=TRUE, na.rm=TRUE)}
+  if (is.null(group)) {plot <- plot + geom_smooth(method=method, formula = y ~ x, se=showCI, na.rm=TRUE, color = colour, fill = colour)} 
+  else {plot <- plot + geom_smooth(method=method, formula = y ~ x, se=showCI, na.rm=TRUE)}
   return(plot)
 }
 
@@ -322,29 +359,34 @@ blue <- "#98a2da"
 yellow <- "#ffe873"
 
 temp <- df
-temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-08-31'),]
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2022-02-28'),]
 
 dfwide <- reshape(data=df, idvar= c("member_id"),
                   timevar = "time",
                   direction="wide")
-dfwide$duration <- round(as.numeric(as.Date('2021-08-31') - as.Date(dfwide$ehealth_eval_timestamp.0)), digits = 0)
+dfwide$duration <- round(as.numeric(as.Date('2022-02-28') - as.Date(dfwide$ehealth_eval_timestamp.0)), digits = 0)
 
 temp <- merge(temp, dfwide[c("member_id", "duration", "ehealth_eval_timestamp.0")], 
+              by=c("member_id"), all.x = TRUE)
+
+temp <- merge(temp, wbswide[c("member_id", "risk_score.r1", "risk_score.r2")], 
               by=c("member_id"), all.x = TRUE)
 
 temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
 temp$ehealth_eval_timestamp.0 <- as.Date(temp$ehealth_eval_timestamp.0)
 
 # nursing support target
-
-# remove withdrawals
-setwd(sprintf("~%s/ehealth/wbs", setpath))
-withdrawal <- readxl::read_xlsx("data_WBS_enrol_status_2022-01-29_Overall.xlsx", sheet  = "Sheet 1"
-                                        , col_names = TRUE, guess_max = 20000)
-setwd(sprintf("~%s/ehealth", setpath))
-withdrawal <- withdrawal %>% filter(Status == "Withdrew")
-# withdrawal <- withdrawal[as.Date(withdrawal$Quit_Date) <= as.Date('2021-08-31'),]
-temp <- temp[temp$member_id %!in% withdrawal$Uid,]
+# # remove withdrawals
+# setwd(sprintf("~%s/ehealth/wbs", setpath))
+# withdrawal <- readxl::read_xlsx("data_WBS_enrol_status_2022-04-09_Overall.xlsx", sheet  = "Sheet 1"
+#                                         , col_names = TRUE, guess_max = 20000)
+# setwd(sprintf("~%s/ehealth", setpath))
+# withdrawal <- withdrawal %>% filter(Status == "Withdrew")
+# 
+# # withdrawal <- withdrawal[as.Date(withdrawal$Quit_Date) <= as.Date('2022-02-28'),]
+# temp <- temp[temp$member_id %!in% withdrawal$Uid,]
+# temp <- temp[temp$nursing_refused %in% 0,]
+# temp <- temp[temp$nursing_withdrawn %in% 0,]
 
 temp$nursing_target <- ifelse(temp$duration <= 90, floor(temp$duration/14),  NA) # 6 times weeks 1-12 (once every 2 weeks)
 temp$nursing_target <- ifelse(temp$duration > 90, 6+floor((temp$duration-90)/30),  temp$nursing_target) # once every month 
@@ -352,8 +394,28 @@ temp$nursing_target <- ifelse(temp$duration > 90, 6+floor((temp$duration-90)/30)
 temp$target_met <- ifelse(temp$f2f_telemode_num >= (temp$nursing_target-0), 1, 0)
 
 temp %>% group_by(gender, age_group) %>%
-  summarise_at(vars(target_met), list(~mean(., na.rm=TRUE), sd = sd(., na.rm=TRUE))) %>% clipr::write_clip()
+  summarise_at(vars(target_met), list(n = ~n(), mean = ~mean(., na.rm=TRUE), sd = ~sd(., na.rm=TRUE))) %>% clipr::write_clip()
 summ(temp$target_met)
+
+
+temp$risk_score_temp <- ifelse(temp$risk_score.r1 < 14, temp$risk_score.r2, temp$risk_score.r1) # if < 14, use score from second round. 
+temp$risk_score_temp <- ifelse(temp$risk_score_temp < 14, 14, temp$risk_score_temp) # if < 14, set to 14 (n=4)
+temp$risk_groups <- car::recode(temp$risk_score_temp, 
+                                "
+14:17 = '14-17';
+18:21 = '18-21';
+22:25 = '22-25';
+26:hi = '26-35'
+")
+get_plot(temp, x = "duration", xlab = "Number of days since baseline", 
+         y = "f2f_telemode_num", ylab = "Number of nursing sessions", group = "risk_groups", legendtitle = "Baseline risk score", legend = TRUE, showCI = FALSE, scatter = F) + ggtitle('') &
+  theme(axis.text.x = element_text(size=rel(6*1)),
+        axis.text.y = element_text(size=rel(6*1))) 
+get_plot(temp, x = "age", xlab = "Age", 
+         y = "f2f_telemode_num", ylab = "Number of nursing sessions", group = "risk_groups", legendtitle = "Baseline risk score", legend = TRUE, showCI = FALSE) + ggtitle('') &
+  theme(axis.text.x = element_text(size=rel(6*1)),
+        axis.text.y = element_text(size=rel(6*1))) 
+
 
 temp1 <- temp[, c("duration", "f2f_num", "age", "ehealth_eval_timestamp")]
 temp1$type <- "Face-to-face"
@@ -365,31 +427,74 @@ temp3 <- temp[, c("duration", "f2f_telemode_num", "age", "ehealth_eval_timestamp
 temp3$type <- "Total"
 names(temp3)[names(temp3) == "f2f_telemode_num"] <- "nursing_support"
 
-
-
 temp4 <- data.frame(duration=seq(0,max(temp$duration)))
 temp4$nursing_target <- ifelse(temp4$duration <= 90, floor(temp4$duration/14),  NA) # 6 times weeks 1-12 (once every 2 weeks)
 temp4$nursing_target <- ifelse(temp4$duration > 90, 6+floor((temp4$duration-90)/30),  temp4$nursing_target) # once every month
 
-temp4$label <- ifelse(temp4$duration==max(temp4$duration),"Target (total)", NA)
+temp4$label <- ifelse(temp4$duration==max(temp4$duration),"Scheduled sessions", NA)
 names(temp4)[names(temp4) == "nursing_target"] <- "nursing_support"
 
 temp1 <- rbind(temp1, temp2, temp3)
 rm(temp2, temp3)
 temp1$type <- factor(temp1$type, levels = c("Total", "Telemode","Face-to-face"))
-temp1 <- temp1[as.Date(temp1$ehealth_eval_timestamp) <= as.Date('2021-08-31'),]
+temp1 <- temp1[as.Date(temp1$ehealth_eval_timestamp) <= as.Date('2022-02-28'),]
 
-(get_plot(temp1, x = "duration", xlab = "Duration in days (since baseline assessment)", 
-           y = "nursing_support", ylab = "", group = "type", legendtitle = "Nursing support type") +  ggtitle('Average number of nursing support sessions (cumulative as of 31 Aug 2021)')) &
-    geom_line(data=temp4, aes(x=duration, y=nursing_support, fill=NULL, color = NULL), method = "loess",  linetype="dashed" ) &
-    geom_label(data=temp4, aes(label = label, fill=NULL, color = NULL), nudge_x = -10, nudge_y = 0.8, size = 7) &
- theme(plot.title = element_text(size = rel(6)))  & coord_cartesian(xlim = c(90, NA)) 
+(get_plot(temp1, x = "duration", xlab = "Days since baseline assessment", 
+           y = "nursing_support", ylab = "Number of sessions", group = "type", legendtitle = "Nursing support type") +  ggtitle('Average number of nursing support sessions (cumulative as of 28 Feb 2022)')) &
+    geom_line(data=temp4, aes(x=duration, y=nursing_support, fill=NULL, color = NULL), method = "loess",  linetype="dashed", show.legend =TRUE) &
+    scale_fill_manual(values = c("#4a4a4a", "#5cbd8f", "#a4afeb")) &
+    scale_color_manual(values = c("#4a4a4a", "#5cbd8f", "#a4afeb")) &
+    # geom_label(data=temp4, aes(label = label, fill=NULL, color = NULL), nudge_x = -6, nudge_y = 0.8, size = 6) &
+    # scale_fill_identity(name = 'the fill', guide = 'legend',labels = c('m1'))  & 
+  theme(plot.title = element_text(size=rel(6)),
+        text = element_text(size=rel(6)),
+        legend.text = element_text(size=rel(6)),
+        axis.text.x = element_text(size=rel(6*1)),
+        axis.text.y = element_text(size=rel(6*1))) & coord_cartesian(xlim = c(90, NA)) 
 
-
-# nursing protocol types used
+# sessions by age & risk ----
 temp <- df
-temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-10-31'),]
 temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
+
+temp <- merge(temp, wbswide[c("member_id", "risk_score.r1", "risk_score.r2")], 
+              by=c("member_id"), all.x = TRUE)
+
+temp$risk_score_temp <- ifelse(temp$risk_score.r1 < 14, temp$risk_score.r2, temp$risk_score.r1) # if < 14, use score from second round. 
+temp$risk_score_temp <- ifelse(temp$risk_score_temp < 14, 14, temp$risk_score_temp) # if < 14, set to 14 (n=4)
+
+temp$risk_groups <- car::recode(temp$risk_score_temp, 
+"
+14:17 = '14-17';
+18:21 = '18-21';
+22:25 = '22-25';
+26:hi = '26-35'
+")
+
+group <- "risk_groups"
+x <- "age_group"
+y <- "f2f_telemode_num"
+xlab <- "Age group"
+ylab <- "Number of nursing support sessions"
+legendtitle <- "Baseline risk score"
+text_size <- 6
+ggplot(temp, aes_string(x=x, y=y, fill = group) ) +
+  xlab(xlab) + ylab(ylab) + guides(fill=guide_legend(title=legendtitle))  +
+  stat_summary(geom = "bar", fun = "mean", position = "dodge", aes(width=0.8)) +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_normal", position=position_dodge(0.8), color = "Black", aes(width=0.1)) + 
+  theme_minimal() +
+  scale_fill_manual(values = RColorBrewer::brewer.pal(name="Reds",n=7)[2:5]) +
+  theme(text = element_text(size=rel(text_size)),
+        legend.text = element_text(size=rel(text_size)),
+        axis.text.x = element_text(size=rel(text_size*1)),
+        axis.text.y = element_text(size=rel(text_size*1))) & coord_cartesian(ylim = c(0, 24)) 
+
+# nursing protocol types used ----
+temp <- df
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2022-02-28'),]
+temp <- temp %>% add_count(member_id, name = "n") %>% filter((n == 1 & time == 0)| (n == 2 & time == 1) | (n >= 2 & time == 2))
+
+temp <- merge(temp, wbswide, 
+              by=c("member_id"), all.x = TRUE)
 
 get_results_by <- function(data, grp, var){
  table <- 
@@ -404,18 +509,18 @@ get_results_by <- function(data, grp, var){
 }
 
 table <- data.frame()
-table <- rbind(table, get_results_by(temp, "Hypertension", "protocol_1.1"))
-table <- rbind(table, get_results_by(temp, "Diabetes", "protocol_1.2"))
-table <- rbind(table, get_results_by(temp, "Cholesterol", "protocol_1.3"))
-table <- rbind(table, get_results_by(temp, "Heart", "protocol_1.14"))
-table <- rbind(table, get_results_by(temp, "FS_total", "protocol_1.8"))
-table <- rbind(table, get_results_by(temp, "SAR_total", "protocol_1.9"))
-table <- rbind(table, get_results_by(temp, "SAR5", "protocol_1.15"))
-table <- rbind(table, get_results_by(temp, "AMIC", "protocol_2.2"))
+table <- rbind(table, get_results_by(temp, "Hypertension.r1", "protocol_1.1"))
+table <- rbind(table, get_results_by(temp, "Diabetes.r1", "protocol_1.2"))
+table <- rbind(table, get_results_by(temp, "Cholesterol.r1", "protocol_1.3"))
+table <- rbind(table, get_results_by(temp, "Heart.r1", "protocol_1.14"))
+table <- rbind(table, get_results_by(temp, "FS_total.r1", "protocol_1.8"))
+table <- rbind(table, get_results_by(temp, "SAR_total.r1", "protocol_1.9"))
+table <- rbind(table, get_results_by(temp, "SAR5.r1", "protocol_1.15"))
+table <- rbind(table, get_results_by(temp, "AMIC.r1", "protocol_2.2"))
 table <- rbind(table, get_results_by(temp, "amic_sum", "protocol_2.2"))
-table <- rbind(table, get_results_by(temp, "Happiness", "protocol_2.1"))
-table <- rbind(table, get_results_by(temp, "Meaning_of_life", "protocol_2.1"))
-table <- rbind(table, get_results_by(temp, "Drug_use", "protocol_1.6"))
+table <- rbind(table, get_results_by(temp, "Happiness.r1", "protocol_2.1"))
+table <- rbind(table, get_results_by(temp, "Meaning_of_life.r1", "protocol_2.1"))
+table <- rbind(table, get_results_by(temp, "Drug_use.r1", "protocol_1.6"))
 table <- rbind(table, get_results_by(temp, "eq5d_pain_discomfort", "protocol_1.7"))
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
@@ -423,25 +528,26 @@ temp %>% group_by(eq5d_pain_discomfort) %>%
   summarise_at(vars(protocol_1.7), list(~n(), ~mean(.>0, na.rm=TRUE))) 
 Sys.setlocale(locale =  "eng") # set locale to traditional Chinese
 
-
-(get_plot(temp[temp$risk_score >=14, ], x = "risk_score", xlab = "WBS risk score", y = "protocol_total_b", ylab = "", group = "gender", legendtitle = "Gender") +
-    ggtitle("Number of times different protocols applied per individual  (as of 31 Oct 2021)") & theme(plot.title = element_text(size = rel(5.5)))) 
+(get_plot(temp[temp$risk_score.r1 >=14, ], x = "risk_score.r1", xlab = "WBS risk score", y = "protocol_total_b", ylab = "", group = "gender", legendtitle = "Gender") +
+    ggtitle("Number of times different protocols applied per individual  (as of 28 Feb 2022)") & theme(plot.title = element_text(size = rel(5.5)))) 
 
 (get_plot(temp, x = "age", xlab = "Age", y = "protocol_total_b", ylab = "", group = "gender", legendtitle = "Gender") +
-    ggtitle("Number of times different protocols applied per individual  (as of 31 Oct 2021)") & theme(plot.title = element_text(size = rel(5.5)))) 
+    ggtitle("Number of times different protocols applied per individual  (as of 28 Feb 2022)") & theme(plot.title = element_text(size = rel(5.5)))) 
 
-
-(get_plot(temp, x = "age", xlab = "Age", 
-          y = "protocol_1.1", ylab = "Hypertension", legend = FALSE) + ggtitle('')) +
-  (get_plot(temp, x = "age", xlab = "Age", 
-            y = "protocol_1.2", ylab = "Diabetes", legend = FALSE) + ggtitle(''))  +
-  (get_plot(temp, x = "age", xlab = "Age", 
-            y = "protocol_1.7", ylab = "Pain", legend = FALSE) +  ggtitle('')) +
-  (get_plot(temp, x = "age", xlab = "Age", 
-            y = "protocol_1.8", ylab = "Frailty", legend = FALSE) + ggtitle(''))  & 
+grp <- "gender"
+(get_plot(temp[temp$protocol_1.1 >= 1,], x = "age", xlab = "Age", 
+          y = "protocol_1.1", ylab = "Frequency", legend = TRUE, group = grp, legendtitle = "Sex") + ggtitle('Hypertension')) +
+  (get_plot(temp[temp$protocol_1.2 >= 1,], x = "age", xlab = "Age", 
+            y = "protocol_1.2", ylab = "Frequency", legend = TRUE, group = grp, legendtitle = "Sex") + ggtitle('Diabetes'))  +
+  (get_plot(temp[temp$protocol_1.7 >= 1,], x = "age", xlab = "Age", 
+            y = "protocol_1.7", ylab = "Frequency", legend = TRUE, group = grp, legendtitle = "Sex") +  ggtitle('Pain')) +
+  (get_plot(temp[temp$protocol_1.8 >= 1,], x = "age", xlab = "Age", 
+            y = "protocol_1.8", ylab = "Frequency", legend = TRUE, group = grp, legendtitle = "Sex") + ggtitle('Frailty')) +
+  (get_plot(temp[temp$protocol_1.3 >= 1,], x = "age", xlab = "Age", 
+            y = "protocol_1.3", ylab = "Frequency", legend = TRUE, group = grp, legendtitle = "Sex") + ggtitle('Hyperlipidaemia')) & 
   plot_annotation(
-    title = 'Number of times nursing protocols applied per individual (as of 31 Oct 2021)'
-  ) & theme(plot.title = element_text(size = rel(3))) & coord_cartesian(ylim = c(0, 6)) 
+    title = 'Number of times nursing protocols applied per person (as of 28 Feb 2022)'
+  ) & theme(plot.title = element_text(size = 32)) & coord_cartesian(ylim = c(0, 8)) 
 
 # EMS activities
 get_plot(temp, x = "duration", xlab = "Duration in days (since baseline assessment)", y = "Total", ylab = "Average number of attended activities in total", group = "gender", legendtitle = "Gender") +
@@ -617,8 +723,8 @@ get_plot(temp_ems[temp_ems$Income_cssa %!in% NA,], x = "attendance_in_time_week"
 
 
 # pre-post results with adjustments ----
-temp <- df %>% filter(time %in% c(0, 1))  %>% add_count(member_id, name = "n") %>% filter(n == 2)
-temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-10-04'),]
+temp <- df %>% filter(time %in% c(0, 1)) %>% add_count(member_id, name = "n") %>% filter(n == 2)
+temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2022-03-31'),]
 
 tempwide <- reshape(data=temp, idvar= c("member_id"),
                     timevar = "time",
@@ -628,104 +734,66 @@ tempwide$t1t0_duration <- as.numeric(round( as.Date(tempwide$ehealth_eval_timest
 temp <- merge(temp, tempwide[c("member_id", "t1t0_duration")], 
               by=c("member_id"), all.x = TRUE)
 
+temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1", 
+                                "housing_type.r1", "marital.r1", "educ.r1", "living_status.r1", 
+                                "Hospital.r1", "Aeservices.r1")], # extract item matched by member ID
+            by=c("member_id"), all.x = TRUE)
+
 temp$month <- lubridate::month(temp$ehealth_eval_timestamp)
 
-table <- combine_tables(NULL,
-                        exponentiate = FALSE,
-                        # show_CI = 0.83,
-                        lmer(amic~ 1+gender+age_group+time*Others+(1| member_id) , REML = TRUE, data = temp),
-                        # glmer(amic~ 1+gender+age_group+time*Others+ (1| member_id), family = binomial, data = temp),
-                        lmer(amic_sum~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        # clmm(as.factor(amic_sum) ~ covid+int + (1 | member_id), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-                        lmer(self_efficacy~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_2~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_3~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_4~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_5~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(eq5d~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_mobility~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_self_care~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_usual_activity~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_pain_discomfort~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_anxiety_depression~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_health~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(satisfaction_1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(satisfaction_2~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(pase_c~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1_2~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_11~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_11~ 1+gender+age_group+time*Others+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_11_1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_12_1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_12_1~ 1+gender+age_group+time*Others+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_12~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(matrix_diet_dh3~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh4~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh7~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh8~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp1~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp3~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp4~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp5~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_sum~ 1+gender+age_group+time*Others+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(use_health_service_8~ 1+gender+age_group+time*Others+(1| member_id) , REML = TRUE, data = temp)
-)
+allVars <- c("amic", "amic_sum", 
+             "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
+             "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
+             "satisfaction_1", "satisfaction_2", 
+             "pase_c", "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_11_1", "pase_c_12_1", "pase_c_12",
+             "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
+             "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5", "diet_sum", "use_health_service_8")
+
+table <- data.frame()
+for (outcome in allVars){
+  table_temp <- combine_tables(NULL, 
+                               exponentiate = FALSE,
+                               decimal_places = 3,
+                               dep_var = paste0(outcome),
+                               lmer(get(outcome)~ 1+gender+age_group+risk_score.r1+time*I(Total>=3)+ (1| member_id) , REML = TRUE, data = temp)
+  )
+  table <- merge(table, table_temp, all = TRUE)
+  if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
+}
+table <- rbind(table[table$X1=="N (unique)",], table[table$X1=="ICC",], table[table$X1=="(Intercept)",], table[table$X1 %!in% c("N (unique)", "ICC", "(Intercept)"),])
+
+# WBS outcomes
+wbs_outcomes <- c("FS_total", "prefrail", "SAR_total", "sarcopenic", "poor_health", "low_wellbeing", "memory_complaints", "incontinent", "polypharmacy", "Hospital", "Hospital_day", "Aeservices", "Aeservices_day", "GOPD", "SOPD", "Clinic", "Hypertension", "Diabetes", "Cholesterol", "Heart", "Stroke", "Copd", "Renal", "Disease_other")
+
+temp <- wbs
+temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-03-31'),]
+temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
+temp <- temp[temp$member_id %in% df$member_id,]
+temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
+              by=c("member_id"), all.x = TRUE)
+
+table <- data.frame()
+for (outcome in wbs_outcomes[7]){
+  table_temp <- combine_tables(NULL, 
+                               exponentiate = FALSE,
+                               decimal_places = 3,
+                         dep_var = paste0(outcome),
+                         lmer(get(outcome)~ 1+gender+age_group+risk_score.r1+Round*Total+ (1| member_id) , REML = TRUE, data = temp)
+  )
+  table <- merge(table, table_temp, all = TRUE)
+  if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
+  table_temp <- NULL
+}
+table <- rbind(table[table$X1=="N (unique)",], table[table$X1=="ICC",], table[table$X1=="(Intercept)",], table[table$X1 %!in% c("N (unique)", "ICC", "(Intercept)"),])
 table %>% clipr::write_clip()
 
-table <- combine_tables(NULL,
-                        exponentiate = FALSE,
-                        # show_CI = 0.83,
-                        lmer(amic~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+(1| member_id) , REML = TRUE, data = temp),
-                        # glmer(amic~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id), family = binomial, data = temp),
-                        lmer(amic_sum~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        # clmm(as.factor(amic_sum) ~ covid+int + (1 | member_id), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-                        lmer(self_efficacy~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_2~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_3~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_4~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(self_efficacy_5~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(eq5d~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_mobility~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_self_care~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_usual_activity~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_pain_discomfort~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_anxiety_depression~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(eq5d_health~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(satisfaction_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(satisfaction_2~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(pase_c~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_1_2~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_11~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_11~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_11_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(pase_c_12_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        # glmer(pase_c_12_1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id), family = binomial, data = temp),
-                        lmer(pase_c_12~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        
-                        lmer(matrix_diet_dh3~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh4~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh7~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(matrix_diet_dh8~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp1~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp3~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp4~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_dp5~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(diet_sum~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+ (1| member_id) , REML = TRUE, data = temp),
-                        lmer(use_health_service_8~ 1+gender+age_group+risk_score+time*protocol_1.1+time*protocol_1.2+(1| member_id) , REML = TRUE, data = temp)
-)
-table %>% clipr::write_clip()
-
+# pre-post results during COVID 4th & 5th waves ----
+import_func("ehealth_analysis.R")
+medianVars <- c("use_health_service_8")
+Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
+temp <- df[df$time %in% c(0,2), ]
+gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
+Sys.setlocale(locale =  "eng") 
 
 # experimental pre-post results by duration/survey date ----
 num <- 4
