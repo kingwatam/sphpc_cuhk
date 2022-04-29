@@ -145,7 +145,7 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_sum", "Diet score")), dim = c(2,34)))
 
 # restrict sample to age >= 60 ----
-cutoff_date <- as.Date('2022-01-31')
+cutoff_date <- as.Date('2022-03-31')
 df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age.r1 >= 60),]
@@ -399,6 +399,7 @@ to_English <- function(df){
 }
 
 allVars <- c("amic", "amic_sum", 
+             "amic1", "amic2", "amic3", "amic4", "amic5",
              "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
              "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
              "satisfaction_1", "satisfaction_2", 
@@ -415,7 +416,7 @@ ordinalVars <- c("amic",
 
 medianVars <- c("use_health_service_8")
 
-gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_levels = TRUE, medianVars = NULL, paired = TRUE, group = "time", id = "member_id", to_English = FALSE, decimal = 3){ 
+gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_levels = TRUE, medianVars = NULL, paired = TRUE, group = "time", id = "member_id", to_English = FALSE, decimal = 3, p_decimal = 3){ 
   table <- data.frame(matrix(ncol = 7,  nrow = 0))
   row_count <- 1
   col_bl <- 3
@@ -455,9 +456,9 @@ gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_lev
   
   table[row_count, 1] <- "N"
   table[row_count, 2] <- ""
-  table[row_count, col_bl] <-  nrow(df[df[[group]] == pre,])
-  table[row_count, col_bl2] <-  nrow(dfwide2)
-  table[row_count, col_f1] <-  nrow(dfwide2)
+  table[row_count, col_bl] <-  nrow(df[df[[group]] %in% pre,])
+  table[row_count, col_bl2] <- nrow(df[df[[group]] %in% post,])
+  table[row_count, col_f1] <-  nrow(df[df[[group]] %in% post,])
   
   row_count <- row_count + 1
   
@@ -483,19 +484,19 @@ gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_lev
       if(var %in% ordinalVars){
         wilcox_test <-  
           wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
-        if (wilcox_test$p.value < 0.001){
+        if (wilcox_test$p.value < 0.001 & p_decimal == decimal){
           table[row_count, col_pval] <- "<0.001"
         } else {
-          table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = decimal)
+          table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = p_decimal)
         }
       } else if (var %in% nominalVars){
         levels <- c(unique(unique(dfwide2[[paste0(var, ".", pre)]]), unique(dfwide2[[paste0(var, ".", post)]])))
         mcnemar_test <-  
           mcnemar.test(table(factor(dfwide2[[paste0(var, ".", pre)]], levels = levels), factor(dfwide2[[paste0(var, ".", post)]], levels = levels))) 
-        if (mcnemar_test$p.value %!in% NaN && mcnemar_test$p.value < 0.001){
+        if (mcnemar_test$p.value %!in% NaN && mcnemar_test$p.value < 0.001 & p_decimal == decimal){
           table[row_count, col_pval] <- "<0.001"
         } else {
-          table[row_count, col_pval] <- mcnemar_test$p.value %>% round(digits = decimal)
+          table[row_count, col_pval] <- mcnemar_test$p.value %>% round(digits = p_decimal)
         }
       }
       
@@ -566,10 +567,10 @@ gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_lev
       t_test <-  
         t.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
       table[row_count, col_dif] <-  (mean(df2[[var]][which(df2[[group]] == post)], na.rm = TRUE) - mean(df2[[var]][which(df2[[group]] == pre)], na.rm = TRUE)) %>% round(digits = decimal-1)
-      if (t_test$p.value < 0.001){
+      if (t_test$p.value < 0.001 & p_decimal == decimal){
         table[row_count, col_pval] <- "<0.001"
       } else {
-        table[row_count, col_pval] <- t_test$p.value %>% round(digits = decimal)
+        table[row_count, col_pval] <- t_test$p.value %>% round(digits = p_decimal)
       }
       
       row_count <- row_count + 1
@@ -585,10 +586,10 @@ gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_lev
       
       wilcox_test <-  
         wilcox.test(dfwide2[[paste0(var, ".", pre)]], dfwide2[[paste0(var, ".", post)]], paired = paired) 
-      if (wilcox_test$p.value < 0.001){
+      if (wilcox_test$p.value < 0.001 & p_decimal == decimal){
         table[row_count, col_pval] <- "<0.001"
       } else {
-        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = decimal)
+        table[row_count, col_pval] <- wilcox_test$p.value %>% round(digits = p_decimal)
       }
       
       row_count <- row_count + 1
@@ -605,6 +606,27 @@ temp <- df[df$time %in% c(1,2), ]
 # temp <- temp[temp$time %in% c(0,1), ]
 
 # temp <- temp[temp$interviewer_name %in% c("Ashley Leung", "Eva Mak", "Susan To", "Tang Tsz Chung", "Lucas Li", "Vicky", "Chan Ka Wai, Katherine", "Carman Yeung", "Yan"), ] # restrict to interviewers with longer interview duration
+gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars, p_decimal = 100) %>% clipr::write_clip()
+Sys.setlocale(locale =  "eng") 
+
+# COVID waves 3-5 ----
+temp <- df
+
+# start defined as new cases >= 15 for 3 days, end defined as new cases < 15 for 3 days (roughly)
+temp$covid_3rd <- ifelse(temp$ehealth_eval_timestamp >= as.Date('2020-07-01') & 
+                           temp$ehealth_eval_timestamp <= as.Date('2020-09-15'), 1, 0) # https://www.thelancet.com/journals/lanwpc/article/PIIS2666-6065(21)00039-0/fulltext
+
+temp$covid_4th <- ifelse(temp$ehealth_eval_timestamp >= as.Date('2020-11-01') & 
+                           temp$ehealth_eval_timestamp <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
+
+temp$covid_5th <- ifelse(temp$ehealth_eval_timestamp >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
+                           # & temp$ehealth_eval_timestamp <= as.Date('2022-06-31')
+                         , 1, 0)
+
+temp$covid <- ifelse(temp$covid_3rd %in% 1 | temp$covid_4th %in% 1 | temp$covid_5th %in% 1, 1, 0)
+
+Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
+temp <- temp[temp$time %in% c(1,2) & temp$covid %in% 0, ]
 gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
 
@@ -624,7 +646,7 @@ varlist <- t(array(c(c("ehealth_eval_timestamp.t1", "ehealth_eval_timestamp.t1")
 dim = c(2,3))) %>% as.data.frame()
 
 get_plot(dfwide, 
-         x = "ehealth_eval_timestamp.t1", y = "eq5d_dif", 
+         x = "ehealth_eval_timestamp.t0", y = "eq5d_dif", 
          jitter_w = 0.25, jitter_h = 0.25)
 
 # pre-post results with adjustments ----
@@ -964,9 +986,12 @@ table %>% clipr::write_clip()
 temp <- df[df$time %in% c(0,1), ]
 # temp <- temp[as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-11-15'),]
 
-temp <- temp[as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & temp$time == 1 |
-               (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') |
-                  as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28'))  & temp$time == 0 , ]
+temp <- temp[
+  (as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') & as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-12-31')) & temp$time == 1 |
+               (as.Date(temp$ehealth_eval_timestamp) <= as.Date('2020-11-19') | 
+                  (as.Date(temp$ehealth_eval_timestamp) >= as.Date('2021-03-28') 
+                   & as.Date(temp$ehealth_eval_timestamp) <= as.Date('2021-12-31'))) & temp$time == 0
+  , ]
 
 temp1 <- temp %>% add_count(member_id) %>% filter(n == 2)
 temp2 <- temp %>% add_count(member_id) %>% filter(
@@ -976,11 +1001,11 @@ temp2 <- temp %>% add_count(member_id) %>% filter(
 temp <- rbind(temp1, temp2)
 rm(temp1, temp2)
 
-# # Obtain a random sub-sample of those with both T0 & T1
-# set.seed(463621)
-# selected_id <- unique(sample(temp$member_id[temp$time == 1], size = 500))
-# temp <- temp[temp$time == 0 |
-#                (temp$time == 1 & temp$member_id %in% selected_id), ]
+# Obtain a random sub-sample of those with both T0 & T1
+set.seed(463621)
+selected_id <- unique(sample(temp$member_id[temp$time == 1], size = 900))
+temp <- temp[temp$time == 0 |
+               (temp$time == 1 & temp$member_id %in% selected_id), ]
 
 # temp <- df[as.Date(df$ehealth_eval_timestamp) >= as.Date('2021-03-28')
 #            # & as.Date(df$ehealth_eval_timestamp) <= as.Date('2021-05-15')
@@ -994,7 +1019,7 @@ vars <- c("member_id", "gender.r1", "dob.r1", "wbs_survey_date.r1",
           "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1",
           "risk_score.r1", "risk_level.r1", "digital.r1")
 
-get_descstat <- function(df){
+get_descstat <- function(df, by_group){
   for (var in vars){
     if (is.character(df[[var]]) |
         is.labelled(df[[var]])){
@@ -1011,14 +1036,15 @@ get_descstat <- function(df){
   allVars <- c("age.r1", "age_group.r1", "gender.r1", "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1", "risk_score.r1")
   catVars <- c("age_group.r1", "gender.r1", "marital.r1", "educ.r1", "living_status.r1", "housing_type.r1")
   tableone::CreateTableOne(data =  df,
-                           strata = c("time"),
+                           strata = c(by_group),
                            vars = allVars, factorVars = catVars) %>%
     print(showAllLevels = TRUE) %>% clipr::write_clip()
 }
-get_descstat(temp)
+get_descstat(temp, by_group =  "time")
 
 library(MatchIt)
 library(optmatch) # for optimal matching
+library(RcppProgress)
 # library(Matching) # for genetic matchin
 # library(rgenoud) # for genetic matchin
 
@@ -1034,20 +1060,23 @@ temp$gender.r1 <- as.factor(temp$gender.r1)
 temp$Drug_use.r1 <- as.factor(temp$Drug_use.r1)
 temp$n <- NULL
 temp_ <- temp %>% add_count(member_id) %>% filter((n == 1 & time == 0) | (n == 2 & time == 1)) # remove pre-test of those with both pre & post
-matched.out <- matchit(time ~ gender.r1 + 
+matched.out <- matchit(time ~ 
+                         gender.r1 +
                          age.r1 +
                          housing_type.r1 +
-                         marital.r1 + educ.r1 + living_status.r1 +
-                         yearmonth +
-                         FS_total.r1 + SAR_total.r1
+                         marital.r1 + educ.r1 + living_status.r1 
+                       + yearmonth 
+                       + FS_total.r1 + SAR_total.r1
                        + Hospital.r1 + Aeservices.r1 + Drug_use.r1
-                       # risk_score
+                       # + risk_score.r1
                        ,
                        data = temp_
                        , method = "optimal"
                        # , caliper = 0.25
-                       # , distance='mahalanobis'
+                       , distance='mahalanobis'
+                       , verbose = TRUE
 )
+summary(matched.out)
 plot(summary(matched.out)
      , xlim=c(0,1)
 )
@@ -1062,12 +1091,15 @@ temp_t0 <- temp %>% add_count(member_id) %>% filter(n == 2 & time == 0) # only T
 temp_t0$covid <- 0
 temp_t0$int <- 1
 temp_t0 <- merge(temp_t0, df_matched[c("member_id", 
-                                       "distance", # comment this out for mahalanobis distance
+                                       # "distance", # comment this out for mahalanobis distance or CEM
                                        "weights", "subclass")], 
                  by=c("member_id"), all.x = TRUE)
 df_matched <- rbind(as.data.frame(df_matched), temp_t0)
 df_matched$member_id_old <- df_matched$member_id
 df_matched$member_id <- df_matched$subclass
+
+tab(df_matched$covid, df_matched$int)
+get_descstat(df_matched[df_matched$covid == 1,], by_group =  "int")
 
 library(cobalt)
 v <- data.frame(old = c("distance", "gender.r1_M", "age.r1", 
@@ -1164,48 +1196,48 @@ complete_cases <- function(df, var){
 table <- combine_tables(NULL,
                         exponentiate = FALSE,
                         # show_CI = 0.83,
-                        lmer(use_health_service_8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "use_health_service_8")),
-                        lmer(amic~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic")),
-                        # glmer(amic~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-                        lmer(amic_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic_sum")),
-                        # clmm(as.factor(amic_sum) ~ covid+int + (1 | subclass), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
-                        lmer(self_efficacy~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy")),
-                        lmer(self_efficacy_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_1")),
-                        lmer(self_efficacy_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_2")),
-                        lmer(self_efficacy_3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_3")),
-                        lmer(self_efficacy_4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_4")),
-                        lmer(self_efficacy_5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_5")),
+                        lmer(use_health_service_8~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "use_health_service_8")),
+                        lmer(amic~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic")),
+                        # glmer(amic~ 1+covid+int*risk_score.r1+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(amic_sum~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "amic_sum")),
+                        # clmm(as.factor(amic_sum) ~ covid+int*risk_score.r1 + (1 | subclass), data = df_matched, link="logit", Hess=TRUE, na.action=na.omit, nAGQ=5),
+                        lmer(self_efficacy~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy")),
+                        lmer(self_efficacy_1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_1")),
+                        lmer(self_efficacy_2~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_2")),
+                        lmer(self_efficacy_3~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_3")),
+                        lmer(self_efficacy_4~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_4")),
+                        lmer(self_efficacy_5~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "self_efficacy_5")),
                         
-                        lmer(eq5d~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d")),
-                        lmer(eq5d_mobility~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_mobility")),
-                        lmer(eq5d_self_care~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_self_care")),
-                        lmer(eq5d_usual_activity~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_usual_activity")),
-                        lmer(eq5d_pain_discomfort~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_pain_discomfort")),
-                        lmer(eq5d_anxiety_depression~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_anxiety_depression")),
-                        lmer(eq5d_health~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_health")),
+                        lmer(eq5d~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d")),
+                        lmer(eq5d_mobility~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_mobility")),
+                        lmer(eq5d_self_care~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_self_care")),
+                        lmer(eq5d_usual_activity~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_usual_activity")),
+                        lmer(eq5d_pain_discomfort~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_pain_discomfort")),
+                        lmer(eq5d_anxiety_depression~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_anxiety_depression")),
+                        lmer(eq5d_health~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "eq5d_health")),
                         
-                        lmer(satisfaction_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_1")),
-                        lmer(satisfaction_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_2")),
+                        lmer(satisfaction_1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_1")),
+                        lmer(satisfaction_2~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "satisfaction_2")),
                         
-                        lmer(pase_c~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c")),
-                        lmer(pase_c_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1")),
-                        lmer(pase_c_1_2~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1_2")),
-                        lmer(pase_c_11~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11")),
-                        # glmer(pase_c_11~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-                        lmer(pase_c_11_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11_1")),
-                        lmer(pase_c_12_1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12_1")),
-                        # glmer(pase_c_12_1~ 1+covid+int+ (1| subclass), family = binomial, data = df_matched),
-                        lmer(pase_c_12~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12")),
+                        lmer(pase_c~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c")),
+                        lmer(pase_c_1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1")),
+                        lmer(pase_c_1_2~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_1_2")),
+                        lmer(pase_c_11~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11")),
+                        # glmer(pase_c_11~ 1+covid+int*risk_score.r1+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(pase_c_11_1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_11_1")),
+                        lmer(pase_c_12_1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12_1")),
+                        # glmer(pase_c_12_1~ 1+covid+int*risk_score.r1+ (1| subclass), family = binomial, data = df_matched),
+                        lmer(pase_c_12~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "pase_c_12")),
                         
-                        lmer(matrix_diet_dh3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh3")),
-                        lmer(matrix_diet_dh4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh4")),
-                        lmer(matrix_diet_dh7~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh7")),
-                        lmer(matrix_diet_dh8~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh8")),
-                        lmer(diet_dp1~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp1")),
-                        lmer(diet_dp3~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp3")),
-                        lmer(diet_dp4~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp4")),
-                        lmer(diet_dp5~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5")),
-                        lmer(diet_sum~ 1+covid+int+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5"))
+                        lmer(matrix_diet_dh3~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh3")),
+                        lmer(matrix_diet_dh4~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh4")),
+                        lmer(matrix_diet_dh7~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh7")),
+                        lmer(matrix_diet_dh8~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "matrix_diet_dh8")),
+                        lmer(diet_dp1~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp1")),
+                        lmer(diet_dp3~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp3")),
+                        lmer(diet_dp4~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp4")),
+                        lmer(diet_dp5~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5")),
+                        lmer(diet_sum~ 1+covid+int*risk_score.r1+ (1| subclass) , REML = TRUE, data = complete_cases(df_matched, "diet_dp5"))
 )
 table %>% clipr::write_clip()
 
@@ -1614,7 +1646,7 @@ plot_ehealth <-
   ) 
 
 plot_covid <-
-  ggplot(covid[covid$date <= as.Date("2021-10-31"),], aes(x=as.Date(date), y = new_confirmed)) +
+  ggplot(covid[covid$date <= as.Date("2022-10-31"),], aes(x=as.Date(date), y = new_confirmed)) +
   labs(
     # title = "COVID-19 cases",
     x = "", 
@@ -1635,12 +1667,18 @@ plot_covid <-
 
 
 library(patchwork)
-plot_covid/plot_ehealth
+(plot_covid 
+  + scale_y_log10()
+  )/plot_ehealth
 
 Sys.setlocale(locale =  "eng")
 setwd(sprintf("~%s/ehealth/slides", setpath))
 # ggsave("T0 vs T1.png", plot = plot_ehealth/plot_covid, height =  40, width =  60, units = "cm", dpi = 300)
-ggsave("T0 vs T1 (paired) & covid.png", plot = plot_covid/plot_ehealth, height =  40, width =  60, units = "cm", dpi = 300, bg = "White")
-ggsave("covid.png", plot = plot_covid, height =  20, width =  60, units = "cm", dpi = 300, bg = "White")
+ggsave("T0 vs T1 (paired) & covid.png", plot = (plot_covid 
+                                                + scale_y_log10()
+                                                )/plot_ehealth, height =  40, width =  60, units = "cm", dpi = 300, bg = "White")
+ggsave("covid.png", plot = (plot_covid 
+                            + scale_y_log10()
+                            ), height =  20, width =  60, units = "cm", dpi = 300, bg = "White")
 ggsave("T0 vs T1 (paired).png", plot = plot_ehealth, height =  20, width =  60, units = "cm", dpi = 300, bg = "White")
 
