@@ -123,3 +123,7 @@ gen_rr <- function(TMRED, rr, linear_cutoff, return_x = FALSE){
     return(table$rr)
   }
 }
+
+p_adjust <- function(p, method = p.adjust.methods, n = length(p)){
+  p.adjust(p = p, method = method, n = n)
+}
