@@ -469,15 +469,42 @@ get_<- function(...){ # evaluate text as expression (faster than eval(parse()) b
 
 gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, show_CI = 0.95, exponentiate = FALSE, decimal_places = 3, lm_robust = FALSE, aic = FALSE){ 
   require(lmerTest)
-  table <- data.frame(matrix(ncol = 2,  nrow = 0))
+  
+  vars_names <- if(class(fit)[1] %in% "multinom") fit$coefnames else row.names(summary(fit)$coef)
+  depvar_categories <-  if(class(fit)[1] %in% "multinom")  row.names(coef(fit)) else dep_var # multiple categories in multinomial regression
+  
+  table <- data.frame(matrix(ncol = length(depvar_categories)+1,  nrow = 0))
   row_count <- 1
   col_count <- 2
   
   if (is.null(dep_var)){
     dep_var <- as.character(terms(fit))[[2]] # as.character(formula(fit)[2])
   }
-
-  if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
+  
+  if (class(fit)[1] %in% "multinom"){
+    n <- iferror(nrow(residuals(fit)), NA)
+    table[row_count, 1] <- "N"
+    table[row_count, col_count] <-  n
+    row_count <- row_count + 1
+    
+    if(adjusted_r2 & !(aic)){
+      adj_r2 <- iferror(1 - ((summary(fit)$deviance/-2)-(length(fit$coeff)-1)) / (summary(fit)$null.deviance/-2), NA)
+      adj_r2 <- round_format(adj_r2, decimal_places)
+      table[row_count, 1] <- "Adjusted R2"
+      table[row_count, col_count] <-  adj_r2
+    } else if (aic){
+      aic <-  iferror(round_format(fit$AIC, decimal_places), NA)
+      table[row_count, 1] <- "AIC"
+      table[row_count, col_count] <- aic
+    } else {
+      r2 <- iferror(1 - ((fit$deviance/-2)) / (deviance(update(fit, . ~ 1, trace=F))/-2), NA)
+      r2 <- round_format(r2, decimal_places)
+      table[row_count, 1] <- "R2"
+      table[row_count, col_count] <-  r2
+    }
+    row_count <- row_count + 1
+    
+  } else if (!is.null(summary(fit)$isLmer) | class(fit)[1] %in% "glmerMod"){ # check if linear mixed model (lmer)
     n <- iferror(nobs(fit), NA)
     n_unique <- iferror(summary(fit)$ngrps[1], NA)
     table[row_count, 1] <- "N (unique)"
@@ -554,70 +581,125 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
   
   print(paste(dep_var))
   
-  for (var in row.names(summary(fit)$coef)){
+  if (class(fit)[1] %in% "multinom"){
+  table[row_count, 1] <- paste0("Levels (ref = ", fit$lev[fit$lev %!in% row.names(coef(fit))], ")") # show reference level
+  table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- depvar_categories
+  
+  row_count <- row_count + 1
+  
+  table[row_count, 1] <- paste0("N of levels (", fit$lev[fit$lev %!in% row.names(coef(fit))],", N = ", table(model.frame(fit)[,dep_var])[fit$lev[fit$lev %!in% row.names(coef(fit))]], ")") # show reference level
+  table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- table(model.frame(fit)[,dep_var])[depvar_categories]
     
-    if (!(var %in% unlist(table[1]))){
-      table[row_count, 1] <- var
-      if (grepl("age_group.", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group.")+2, nchar(var))
-        table[row_count, 1] <- var_name
-      } else if (grepl("age_group", var, fixed = TRUE)){
-        var_name <- substr(var, nchar("age_group")+1, nchar(var))
-        table[row_count, 1] <- var_name
-      }
-    } else {
-      row_count <- match(var, unlist(table[1]))
-    }
-    
-    colnames(table)[col_count] <- dep_var
-    
-    beta <- iferror(summary(fit, robust = lm_robust)$coef[var, 1], NA)
-    if (class(fit)[1] %in% "coxph"){
-      se <-  iferror(summary(fit)$coef[var, 3], NA)
-    } else {
-      se <-  iferror(summary(fit, robust = lm_robust)$coef[var, 2], NA)
-    }
-    
-    alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
-    if (show_CI & lm_robust & class(fit)[1] %in% "lm"){
-      lowerCI <- iferror(beta + qt(p=alpha/2, df=fit$df.residual) * se, NA)
-      
-      upperCI <- iferror(beta + qt(p=1-(alpha/2), df=fit$df.residual) * se, NA)
-    }
-    else if (show_CI){
-    lowerCI <- iferror(confint(fit, var, level=(1-alpha))[1],  # this is slower than qnorm
-                       iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
-                       )
-                       
-    upperCI <- iferror(confint(fit, var, level=(1-alpha))[2], 
-                       iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
-                       )
-    } 
-    
-    if (class(fit)[1] %in% "gee"){
-      robust_z <- summary(fit)$coef[var, ncol(summary(fit)$coef)]
-      p_value <- iferror(2 * pnorm(abs(robust_z), lower.tail = FALSE), NA)
-    } else {
-      p_value <- iferror(summary(fit, robust = lm_robust)$coef[var, ncol(summary(fit)$coef)], NA)
-    }
-    
-    # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
-    if (show_p){
-      table[row_count, col_count] <-  round_format(p_value, 4)
-    } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
-      table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
-      if (show_CI){
-        table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
-      }
-    } else if (show_CI){
-      table[row_count, col_count] <-  paste0(round_format(lowerCI, decimal_places), ", ", round_format(upperCI, decimal_places))
-    } else {
-      table[row_count, col_count] <-  starred_p(p_value, decimal_places, beta)
-    }
-    
-    row_count <- row_count + 1
-    
+  row_count <- row_count + 1
   }
+  
+  if (class(fit)[1] %in% "multinom"){
+    for (depvar_cat in depvar_categories) {
+      
+      for (var in vars_names){
+        if (!(var %in% unlist(table[1]))){
+          table[row_count, 1] <- var
+        } else {
+          row_count <- match(var, unlist(table[1]))
+        }
+        
+        colnames(table)[col_count] <- dep_var
+        
+        beta <- iferror(summary(fit)$coefficients[depvar_cat, var], NA)
+        se <- iferror(summary(fit)$standard.errors[depvar_cat, var], NA)
+        
+        if (show_CI){
+          alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
+          lowerCI <- iferror(confint(fit, var, level=(1-alpha))[, 1, depvar_cat],  # this is slower than qnorm
+                             iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+          )
+          upperCI <- iferror(confint(fit, var, level=(1-alpha))[, 2, depvar_cat], 
+                             iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+          )
+        } 
+        
+        p_value <- iferror(pnorm(beta/se, lower.tail=FALSE)*2, NA) # z-score = beta/se
+        
+        # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
+        if (show_p){
+          table[row_count, col_count] <-  round_format(p_value, 4)
+        } else if (exponentiate){
+          table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
+          if (show_CI){
+            table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
+          }
+        } else if (show_CI){
+          table[row_count, col_count] <-  paste0(round_format(lowerCI, decimal_places), ", ", round_format(upperCI, decimal_places))
+        } else {
+          table[row_count, col_count] <-  starred_p(p_value, decimal_places, beta)
+        }
+        
+        p_value <- NA
+        
+        row_count <- row_count + 1
+      }
+      
+      col_count <- col_count + 1
+      
+    }
+  }  else {
+    for (var in vars_names){
+      if (!(var %in% unlist(table[1]))){
+        table[row_count, 1] <- var
+      } else {
+        row_count <- match(var, unlist(table[1]))
+      }
+      
+      colnames(table)[col_count] <- dep_var
+      
+      beta <- iferror(summary(fit, robust = lm_robust)$coef[var, 1], NA)
+      if (class(fit)[1] %in% "coxph"){
+        se <-  iferror(summary(fit)$coef[var, 3], NA)
+      } else {
+        se <-  iferror(summary(fit, robust = lm_robust)$coef[var, 2], NA)
+      }
+      
+      alpha <- if(show_CI %in% c(TRUE, FALSE)) (1-0.95) else (1-show_CI)
+      if (show_CI & lm_robust & class(fit)[1] %in% "lm"){
+        lowerCI <- iferror(beta + qt(p=alpha/2, df=fit$df.residual) * se, NA)
+        
+        upperCI <- iferror(beta + qt(p=1-(alpha/2), df=fit$df.residual) * se, NA)
+      }
+      else if (show_CI){
+        lowerCI <- iferror(confint(fit, var, level=(1-alpha))[1],  # this is slower than qnorm
+                           iferror(beta + qnorm(alpha/2) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+        )
+        
+        upperCI <- iferror(confint(fit, var, level=(1-alpha))[2], 
+                           iferror(beta + qnorm(1-(alpha/2)) * se, NA) # produces slightly different CIs than confint due to use of z-scores, except for some models (e.g. cox regression)
+        )
+      } 
+      
+      if (class(fit)[1] %in% "gee"){
+        robust_z <- summary(fit)$coef[var, ncol(summary(fit)$coef)]
+        p_value <- iferror(2 * pnorm(abs(robust_z), lower.tail = FALSE), NA)
+      } else {
+        p_value <- iferror(summary(fit, robust = lm_robust)$coef[var, ncol(summary(fit)$coef)], NA)
+      }
+      
+      # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
+      if (show_p){
+        table[row_count, col_count] <-  round_format(p_value, 4)
+      } else if (class(fit)[1] %in% c("glm", "coxph") & exponentiate){
+        table[row_count, col_count] <-  starred_p(p_value, decimal_places, exp(beta))
+        if (show_CI){
+          table[row_count, col_count] <-  paste0(round_format(exp(lowerCI), decimal_places), ", ", round_format(exp(upperCI), decimal_places))
+        }
+      } else if (show_CI){
+        table[row_count, col_count] <-  paste0(round_format(lowerCI, decimal_places), ", ", round_format(upperCI, decimal_places))
+      } else {
+        table[row_count, col_count] <-  starred_p(p_value, decimal_places, beta)
+      }
+      
+      row_count <- row_count + 1
+    }
+  }
+  
   col_count <- col_count + 1
   return(table)
 }
@@ -636,9 +718,12 @@ combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALS
       new_table <- gen_reg(list(...)[[i]], dep_var = dep_var_saved, adjusted_r2, show_p, show_CI, exponentiate, decimal_places, lm_robust, aic) 
     }
     dep_vars <- names(table)
+    dep_vars_new <- names(new_table)
     names(table) <- c("X1",rep(2:ncol(table)))
+    names(new_table) <- c("X1",paste0("new_", rep(2:ncol(new_table))))
     table <- plyr::join(table, new_table, by=c("X1"), type="full")
     names(table) <- c(dep_vars, dep_var)
+    names(table) <- c(dep_vars, dep_vars_new[2:length(dep_vars_new)])
     names(table)[names(table) == "X1"] <- ""
   }
   return(table)
