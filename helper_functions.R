@@ -32,8 +32,9 @@
 ## get_freqtable() returns up to 3-way frequency table as a data frame
 ## eval_() simplifies eval(parse()) globally, while concatenating strings so that paste/sprintf functions are not needed. Beware of certain problems since it evaluates objects from the global environment
 ## get_() works like get() in the global environment. Beware of certain problems since it gets objects from the global environment
-## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
 ## gen_reg() generates the results for each model to be used by combine_tables() 
+## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
+## combinetab_loop() is a wrapper function for combine_tables for different dependent variables with a fixed set of explanatory variables
 ## save_() works the same as save() with user-defined names for objects
 ## timeout_skip() skips when running time exceeds a set amount
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
@@ -726,6 +727,22 @@ combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALS
     names(table) <- c(dep_vars, dep_vars_new[2:length(dep_vars_new)])
     names(table)[names(table) == "X1"] <- ""
   }
+  return(table)
+}
+
+combinetab_loop <- function(data, outcomes, formula){
+  table <- data.frame()
+  for (outcome in outcomes){
+    table_temp <- combine_tables(NULL, 
+                                 exponentiate = FALSE,
+                                 decimal_places = 3,
+                                 dep_var = paste0(outcome),
+                                 lm(paste0(outcome, formula), data = data)
+    )
+    if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
+    table <- plyr::join(table, table_temp, by = 1, type="full")
+  }
+  names(table)[names(table) == "X1"] <- ""
   return(table)
 }
 
