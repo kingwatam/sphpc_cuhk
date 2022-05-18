@@ -20,6 +20,12 @@ temp$Age <- NULL
 temp$Dental.problem <- (temp$Dental.problem-2)*-1 # from 2 = No to 0 = No
 df <-  merge(df, temp, # extract item matched by case ID
              by=c("DH_Reference_No"), all.x = TRUE)
+
+rm(temp)
+
+temp <- foreign_to_labelled(haven::read_sav("DH_PHS 2014-15_WC_HC_15.03.2022.sav"))
+df <-  merge(df, temp, # extract item matched by case ID
+             by=c("DH_Reference_No", "Q1", "Q2"), all.x = TRUE)
 rm(temp)
 
 names(df)[names(df) == "Q1"] <- "sex"
@@ -79,11 +85,57 @@ df$male <- ifelse(df$sex == "Male", 1, 0)
 
 df$HbA1c <- ifelse(df$HbA1c == 333, 3.8, df$HbA1c) # less than 3.8% is censored 
 
-df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a != 1 & df$Q35 != 1), 1, 
+df$Waist_circum <- ifelse(df$Waist_circum == 777, NA, df$Waist_circum)
+df$Hip_circum <- ifelse(df$Hip_circum == 777, NA, df$Hip_circum)
+df$WHR <- ifelse(df$WHR == 777, NA, df$WHR)
+
+# coding undiagnosed, incidence, prevalent ----
+df$case_inc <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), 1, 
                        ifelse(df$Q35a ==  1, 0, NA)) # incident cases as control
 
-df$case_prev <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & df$Q35 != 1, 1, 
-                        ifelse(df$Q35 ==  1, 0, NA)) # prevalent cases as control
+df$case_prev <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), 1, 
+                        ifelse(df$Q35 ==  1 | df$Q35a ==  1 | df$Q36c == 1, 0, NA)) # prevalent cases as control
+
+df$case_inc_ <- ifelse(df$case_inc %in% 1, "undiagnosed",
+                       ifelse(df$case_inc %in% 0, "incident DM", NA))
+df$case_prev_ <- ifelse(df$case_prev %in% 1, "undiagnosed",
+                        ifelse(df$case_prev %in% 0, "prevalent DM", NA))
+
+df$normoglycemic <-  ifelse(  (df$HbA1c < 6.5 & df$FPG < 7), 1, 0)
+
+df$case_inc_norm_ <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), "Undiagnosed", 
+                              ifelse( df$Q35a ==  1, "Incident", 
+                                             ifelse(  (df$HbA1c < 6.5 & df$FPG < 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), "Normal", NA))) # excluding prevalent cases
+
+df$case_prev_norm_ <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), "Undiagnosed", 
+                             ifelse( df$Q35 ==  1 | df$Q35a ==  1 | df$Q36c == 1, "Prevalent", 
+                                     ifelse(  (df$HbA1c < 6.5 & df$FPG < 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), "Normal", NA))) # excluding prevalent cases
+
+df$case_inc_norm_ <- relevel(as.factor(df$case_inc_norm_), ref = "Incident")
+df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Prevalent")
+
+df$case_norm_ <- ifelse(df$case_inc_norm_ %!in% "Incident", as.character(df$case_inc_norm_), NA)
+
+df$HTcase_prev_norm_ <- ifelse( (df$Systolic_BP >= 140 | df$Diastolic_BP >= 90) & (df$Q32  %!in% 1 & df$Q32a %!in% 1 & df$Q33a %!in% 1), "Undiagnosed HT", 
+                          ifelse(df$Q32 == 1 | df$Q32a == 1 | df$Q33a == 1, "Prevalent", 
+                                 ifelse( (df$Systolic_BP < 140 & df$Diastolic_BP < 90) & (df$Q32  %!in% 1 & df$Q32a %!in% 1 & df$Q33a %!in% 1), "Normal", NA))) # prevalent cases as control
+
+df$HTcase_inc_norm_ <- ifelse( (df$Systolic_BP >= 140 | df$Diastolic_BP >= 90) & (df$Q32  %!in% 1 & df$Q32a %!in% 1 & df$Q33a %!in% 1), "Undiagnosed HT", 
+                                ifelse(df$Q32a == 1 , "Incident", 
+                                       ifelse( (df$Systolic_BP < 140 & df$Diastolic_BP < 90) & (df$Q32  %!in% 1 & df$Q32a %!in% 1 & df$Q33a %!in% 1), "Normal", NA))) # prevalent cases as control
+
+df$cholcase_prev_norm_ <- ifelse( (df$Total_Chol >= 5.2) & (df$Q29  %!in% 1 & df$Q29a %!in% 1 & df$Q30a %!in% 1), "Undiagnosed hyperchol", 
+                                ifelse(df$Q29 == 1 | df$Q29a == 1 | df$Q30a == 1, "Prevalent", 
+                                       ifelse( (df$Total_Chol < 5.2) & (df$Q29  %!in% 1 & df$Q29a %!in% 1 & df$Q30a %!in% 1), "Normal", NA))) # prevalent cases as control
+
+df$cholcase_inc_norm_ <- ifelse( (df$Total_Chol >= 5.2) & (df$Q29  %!in% 1 & df$Q29a %!in% 1 & df$Q30a %!in% 1), "Undiagnosed hyperchol", 
+                               ifelse(df$Q29a == 1 , "Incident", 
+                                      ifelse( (df$Total_Chol < 5.2) & (df$Q29  %!in% 1 & df$Q29a %!in% 1 & df$Q30a %!in% 1), "Normal", NA))) # prevalent cases as control
+
+df$HTcase_inc_norm_ <- relevel(as.factor(df$HTcase_inc_norm_), ref = "Incident")
+df$HTcase_prev_norm_ <- relevel(as.factor(df$HTcase_prev_norm_), ref = "Prevalent")
+df$cholcase_inc_norm_ <- relevel(as.factor(df$cholcase_inc_norm_), ref = "Incident")
+df$cholcase_prev_norm_ <- relevel(as.factor(df$cholcase_prev_norm_), ref = "Prevalent")
 
 df <- df[df$age <= 84,] # match age range of those who took health exam
 df$econ_active <- ifelse(df$econ == "Economically active persons", 1, 0)
@@ -219,6 +271,9 @@ df$pa_recr_prop <- df$MET_recr/df$MET_week_con
 df$pa_trans_prop <- df$MET_trans/df$MET_week_con
 df$pa_work_trans_prop <- df$MET_work_trans/df$MET_week_con
 
+df$pa_work <- df$pa_work_mod + df$pa_work_vig
+df$pa_recr <- df$pa_recr_mod + df$pa_recr_vig
+
 # medical conditions ever diagnosed ----
 df$cancer <- ifelse(df$Q26a == 1, 1, 
                     ifelse(df$Q26a == 2, 0, NA))
@@ -277,6 +332,7 @@ df$oth_chronic  <- ifelse(df$Q27qrs_regp == 1, 1,
 df$eye  <- ifelse(df$Q39 == 1, 1, 
                   ifelse(df$Q39 == 2, 0, NA))
 
+# healthy (without co-morbidity) ----
 all_conditions <- c("cancer", "stroke", "CHD",
                     "asthma", "copd", "oth_respir",
                     "hi_glucose", "diabetes", "hyperchol", "hypertension", 
@@ -319,11 +375,30 @@ df$case_inc_healthy <- ifelse(df$case_inc %in% 1, "undiagnosed",
                                ifelse(df$case_healthy_comorbid == "healthy", "healthy",
                                       ifelse(df$case_inc == 0, "incident DM", NA)))
 
-df$case_comorbid <- ifelse(df$case_prev %in% 1, "undiagnosed",
+df$case_comorbid_ <- ifelse(df$case_prev %in% 1, "undiagnosed",
                                ifelse(df$case_healthy_comorbid == "comorbid", "comorbid", NA))
 
+df$case_healthy_ <- ifelse(df$case_prev %in% 1, "undiagnosed",
+                           ifelse(df$case_healthy_comorbid == "healthy", "healthy", NA))
+
+
+# bmi categories ----
+df$bmi_cat <- with(df, 
+                   case_when(
+                     BMI_recal < 20 ~ "< 20",
+                     BMI_recal >= 20 & BMI_recal < 23 ~ "20-23",
+                     BMI_recal >= 23 & BMI_recal < 25 ~ "23-25",
+                     BMI_recal >= 25 & BMI_recal < 27.5 ~ "25-27.5",
+                     BMI_recal >= 27.5 & BMI_recal < 30 ~ "27.5-30",
+                     BMI_recal >= 30  ~ ">=30")) 
+df$bmi_cat <- factor(df$bmi_cat, levels = c("< 20", "20-23", "23-25", "25-27.5", "27.5-30", ">=30"))
+
+# # save data ----
+# save(df, file = "t2dm_data.RData")
+# haven::write_sav(df, "t2dm_data.sav")
+
 # generate descriptive statistics ----
-gen_desc <- function(data, vars, ordinalVars, medianVars, group = "time", show_NA = FALSE, both_tests = FALSE){ 
+gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = "time", show_NA = FALSE, both_tests = FALSE){ 
   categories <- unique(df[[group]]) 
   if (!show_NA){
     categories <- categories[categories %!in% NA]
@@ -449,22 +524,396 @@ allVars <- c(allVars , "MET_week_con", "MET_work", "MET_trans", "MET_recr",
              "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "pa_vig", "pa_mod", "sed_time_perday"
              )
 
-df$case_inc_ <- ifelse(df$case_inc %in% 1, "undiagnosed",
-                       ifelse(df$case_inc %in% 0, "incident DM", NA))
-df$case_prev_ <- ifelse(df$case_prev %in% 1, "undiagnosed",
-                       ifelse(df$case_prev %in% 0, "prevalent DM", NA))
+gen_desc(df, vars = allVars, ordinalVars = catVars, medianVars = NULL, group = "case_inc") %>% clipr::write_clip()
 
-gen_desc(df, vars = allVars, ordinalVars = catVars, medianVars = NULL, group = "case_healthy") %>% clipr::write_clip()
+# causal diagram ----
+dagitty::dagitty('
+dag {
+bb="-3.484,-2.265,3.202,2.885"
+"BMI/WC/WHR" [pos="-0.571,0.542"]
+"self-rated health" [adjusted,pos="0.690,1.333"]
+"undiagnosed DM" [outcome,pos="1.705,-0.031"]
+HT [adjusted,pos="-1.076,-1.331"]
+age [adjusted,pos="-2.271,-0.690"]
+pa_recr_vig [adjusted,pos="0.284,-2.059"]
+pa_work_vig [adjusted,pos="-0.627,-2.059"]
+sex [adjusted,pos="-1.487,1.333"]
+smoking [adjusted,pos="-1.982,0.256"]
+who_pa [adjusted,pos="1.280,-1.709"]
+working_class [latent,pos="-1.794,-1.589"]
+"BMI/WC/WHR" -> "undiagnosed DM"
+"BMI/WC/WHR" <-> HT
+"self-rated health" -> "undiagnosed DM"
+HT -> "self-rated health"
+HT -> "undiagnosed DM"
+HT <-> smoking
+age -> "BMI/WC/WHR"
+age -> "undiagnosed DM"
+age -> HT
+age -> working_class
+pa_recr_vig -> "BMI/WC/WHR"
+pa_recr_vig -> "self-rated health"
+pa_recr_vig -> "undiagnosed DM"
+pa_recr_vig -> who_pa
+pa_work_vig -> "BMI/WC/WHR"
+pa_work_vig -> "self-rated health"
+pa_work_vig -> "undiagnosed DM"
+pa_work_vig -> who_pa
+sex -> "BMI/WC/WHR"
+sex -> "self-rated health"
+sex -> "undiagnosed DM"
+sex -> HT
+sex -> pa_recr_vig
+sex -> pa_work_vig
+sex -> smoking
+smoking -> "BMI/WC/WHR"
+smoking -> "undiagnosed DM"
+who_pa -> "BMI/WC/WHR"
+who_pa -> "self-rated health"
+who_pa -> "undiagnosed DM"
+who_pa -> HT
+working_class -> "self-rated health"
+working_class -> pa_recr_vig
+working_class -> pa_work_vig
+working_class -> smoking
+working_class -> who_pa
+}
+')  %>% plot
+
+# multinomial logistic ----
+library(nnet)
+library(stargazer)
+# library(mlogit)
+
+
+df$case_inc_norm_ <- relevel(as.factor(df$case_inc_norm_), ref = "Normal")
+# df$case_inc_norm_ <- relevel(as.factor(df$case_inc_norm_), ref = "Incident")
+
+df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Normal")
+# df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Prevalent")
+
+
+df$age_cat_ <- recode_age(df$age, age_labels = c("0-34", "35-44", "45-54", "55-64", "65-74", "75+"))
+df$age_cat_ <- car::recode(df$age_cat_, " '0-34' = '15-34' ") # min age for PHS survey is 15
+
+multinom_model <- multinom(case_inc_norm_ ~ age
+                           + I(age^2)
+                           + male
+                           # + scale(Waist_circum)
+                           # + scale(WHR)
+                           # + as.factor(bmi_cat)
+                           # + scale(BMI_recal)
+                           + health+who_pa
+                           + hypertension
+                           + I(smoking=="Currently smoke")
+                           + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                           # + MET_week_con
+                           # + MET_work + MET_trans + MET_recr
+                           # + pa_work_prop + pa_trans_prop + pa_recr_prop
+                           + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                           + sed_time_perday
+                           # + pa_vig + pa_mod
+                           , data = df) 
+
+
+glm_model <- glm(I(case_norm_=="Undiagnosed")~1+age+I(age^2)+male
+                 # + scale(Waist_circum)
+                 # + scale(WHR)
+                 # + as.factor(bmi_cat)
+                 # + scale(BMI_recal)
+                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                 +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
+                 # + MET_work + MET_trans + MET_recr
+                 # + pa_work_prop + pa_trans_prop + pa_recr_prop
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 + sed_time_perday
+                 , family = binomial, data =  df)
+
+glm_model1 <- glm(I(case_norm_=="Undiagnosed")~1+age+I(age^2)+male
+                 + Waist_circum
+                 + WHR
+                 # + as.factor(bmi_cat)
+                 + BMI_recal
+                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                 +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
+                 # + MET_work + MET_trans + MET_recr
+                 # + pa_work_prop + pa_trans_prop + pa_recr_prop
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 + sed_time_perday
+                 , family = binomial, data =  df)
+
+glm_model2 <- glm(case_inc~1+age+I(age^2)+male
+                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                 # + live.alone
+                 + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
+                 # + MET_work + MET_trans + MET_recr
+                 # + pa_work_prop + pa_trans_prop + pa_recr_prop
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 + sed_time_perday
+                 , family = binomial, data =  df)
+
+glm_model3 <- glm(case_prev~1+age+I(age^2)+male
+                  + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                  # + live.alone
+                  + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
+                  # + MET_work + MET_trans + MET_recr
+                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
+                  +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                  + sed_time_perday
+                  , family = binomial, data =  df)
+
+table <- combine_tables(NULL, 
+                             exponentiate = TRUE,
+                             decimal_places = 3,
+                             # dep_var = paste0(outcome),
+                             multinom_model,
+                             update(multinom_model, case_prev_norm_ ~ . )
+                             , glm_model
+                             , glm_model1
+                             # , glm_model2
+                             # , glm_model3
+)
+table %>% clipr::write_clip()
+
+multinom_model %>% 
+  stargazer(type="text", style = "default",  
+            # apply.coef = exp,
+            star.cutoffs = c(0.05, 0.01, 0.001),
+            report=('vc*p'),
+            ci = TRUE,
+            t.auto=FALSE, p.auto=FALSE, 
+            add.lines = list(c("n", nrow(multinom_model$residuals), nrow(multinom_model$residuals)))) %>% clipr::write_clip()
+
+
+
+glm(health ~ age
+    # + I(age ^ 2)
+    + male
+    + scale(Waist_circum)
+    + scale(WHR)
+    + scale(BMI_recal)
+    + health+who_pa
+    + hypertension
+    + I(smoking=="Currently smoke")
+    # + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+    # + MET_week_con
+    # + MET_work + MET_trans + MET_recr
+    # + pa_work_prop + pa_trans_prop + pa_recr_prop
+    + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod + pa_vig + pa_mod + sed_time_perday
+    , family = gaussian, data = df) %>%
+  stargazer(type="text", style = "default",  apply.coef = exp, ci = TRUE, t.auto=FALSE, p.auto=FALSE, nobs = TRUE)
+
+# is-lasso ----
+# dep_var <- "case_prev"
+
+df$case_healthy <-ifelse(df$case_healthy_ == "healthy", 0, 1)
+dep_var <- "case_prev"
+xvars <- c("bmi_cat", allVars, "Systolic_BP", "Diastolic_BP", "hypertension")
+
+# islasso
+temp <- df[, c(dep_var, xvars)]
+temp <- na.omit(temp)
+set.seed(27121)
+fit <- islasso(as.formula(paste0(dep_var, " ~ .")), data=temp)
+
+# table <- data.frame()
+table_temp <- summary(fit) %>% coef() %>% as.data.frame()
+table_temp <- table_temp[table_temp$`Pr(>|z|)` < 0.9 | row.names(table_temp) %in% "(Intercept)",] # drop estimates if p-value >= 0.1, except for intercept
+table_temp$Estimate <- starred_p(table_temp$`Pr(>|z|)`, decimal_places = 3, table_temp$Estimate)
+table_temp$variables <- row.names(table_temp)
+table_temp <- rbind(NA, table_temp)
+table_temp$variables[table_temp$variables %in% NA] <- "N"
+table_temp$Estimate[table_temp$variables == "N"] <-  fit$internal$n
+table_temp <- rbind(NA, table_temp)
+table_temp$variables[table_temp$variables %in% NA] <- "R2"
+table_temp$Estimate[table_temp$variables == "R2"] <-  round(1 - ((fit$deviance/-2)) / (fit$null.deviance/-2) , 3) # 1- sum((fit$fitted.values - fit$data$y) ^ 2)/sum((fit$data$y - mean(fit$data$y)) ^ 2)  or  cor(fit$fitted.values, fit$data$y)^2 
+table_temp <- table_temp %>% select(variables, Estimate)
+# table <- merge(table, table_temp, all = TRUE)
+# table <- rbind(table[table$X1=="N",], table[table$X1=="R2",], table[table$X1=="(Intercept)",], table[table$X1 %!in% c("N", "R2", "(Intercept)"),])
+
+
+# DM risk scores ----
+risk_scoring <- function(df, type = "NDS"){
+  if (type == "NDS"){
+    score_age <- with(df, 
+                      case_when(
+                        age <= 34 ~ 0, # age >= 25 (original)
+                        age >= 35 & age <= 44 ~ 8,
+                        age >= 45 & age <= 54 ~ 13,
+                        age >= 55 & age <= 64 ~ 20,
+                        age >= 65  ~ 22)) # & age <= 74 (original)
+    score_bmi <- with(df, 
+                      case_when(
+                        BMI_recal < 20 ~ -6, # BMI_recal >= 18 (original)
+                        BMI_recal >= 20 & BMI_recal < 23 ~ 0,
+                        BMI_recal >= 23 & BMI_recal < 25 ~ 9,
+                        BMI_recal >= 25 & BMI_recal < 27.5 ~ 14,
+                        BMI_recal >= 27.5 & BMI_recal < 30 ~ 18,
+                        BMI_recal >= 30  ~ 20)) 
+    
+    score_ht <- ifelse(df$hypertension %in% 1, 8, 0)
+    
+    score <- score_age+score_bmi+score_ht
+  }
+  
+  if (type == "ADA"){
+    score_age <- with(df, 
+                      case_when(
+                        age < 40 ~ 0, 
+                        age >= 40 & age <= 49 ~ 1,
+                        age >= 50 & age <= 59 ~ 2,
+                        age >= 60  ~ 3)) 
+    
+    score_sex <- with(df, 
+                      case_when(
+                        sex %in% "Female" ~ 0, 
+                        sex %in% "Male" ~ 1)) 
+    
+    score_famhx <- 0
+    # with(df, 
+    #                 case_when(
+    #                   Family.history.DM %in% 1 ~ 1, 
+    #                   Family.history.DM %in% 0 ~ 0)) 
+    
+    score_ht <- ifelse(df$hypertension %in% 1, 1, 0)
+    
+    score_bmi <- with(df, 
+                      case_when(
+                        BMI_recal < 23 ~ 0,
+                        BMI_recal >= 23 & BMI_recal < 25 ~ 1,
+                        BMI_recal >= 25 & BMI_recal < 40 ~ 2,
+                        BMI_recal >= 40  ~ 3)) 
+    
+    score_active <- ifelse(df$who_pa %in% 1, -1, 0)
+    
+    score <- score_age+score_sex+score_famhx+score_bmi+score_ht+score_active
+    score <- round(0+((score-0)*(9-0)/(8-0)), 1) # feature scale it from [0-51] to [0-41], when without family history of DM
+  }
+  
+  if (type == "NCDRS"){
+    score_age <- with(df, 
+                      case_when(
+                        age <= 24 ~ 0, # age >= 20 (original)
+                        age >= 25 & age <= 34 ~ 4,
+                        age >= 35 & age <= 39 ~ 8,
+                        age >= 40 & age <= 44 ~ 11,
+                        age >= 45 & age <= 49 ~ 12,
+                        age >= 50 & age <= 54 ~ 13,
+                        age >= 55 & age <= 59 ~ 15,
+                        age >= 60 & age <= 64 ~ 16,
+                        age >= 65  ~ 18)) # & age <= 84 (original)
+    
+    score_bmi <- with(df, 
+                      case_when(
+                        BMI_recal < 22 ~ 0,
+                        BMI_recal >= 22 & BMI_recal < 24 ~ 1,
+                        BMI_recal >= 24 & BMI_recal < 30 ~ 3,
+                        BMI_recal >= 30  ~ 5)) 
+    
+    score_sex <- with(df, 
+                      case_when(
+                        sex %in% "Female" ~ 0, 
+                        sex %in% "Male" ~ 2)) 
+    
+    score_waist <- 0 # replace it with waist circumference
+    
+    score_sbp <- with(df, 
+                      case_when(
+                        Systolic_BP < 110 ~ 0,
+                        Systolic_BP >= 110 & Systolic_BP < 120 ~ 1,
+                        Systolic_BP >= 120 & Systolic_BP < 130 ~ 3,
+                        Systolic_BP >= 130 & Systolic_BP < 140 ~ 6,
+                        Systolic_BP >= 140 & Systolic_BP < 150 ~ 7,
+                        Systolic_BP >= 150 & Systolic_BP < 160 ~ 8,
+                        Systolic_BP >= 160  ~ 10)) 
+    
+    score_famhx <- 0
+    # with(df, 
+    #                   case_when(
+    #                     Family.history.DM %in% 1 ~ 6, 
+    #                     Family.history.DM %in% 0 ~ 0)) 
+    
+    score <- score_age+score_bmi+score_sex+score_waist+score_sbp+score_famhx
+    # score <- round(0+((score-0)*(51-0)/(41-0)), 1) # feature scale it from [0-41] to [0-51], when without waist circumference
+    score <- round(0+((score-0)*(51-0)/(35-0)), 1) # feature scale it from [0-35] to [0-51], when without family hx and waist 
+  }
+  return(score)
+}
+
+df$score_NDS <- risk_scoring(df, type = "NDS")
+df$score_NDS_ <- ifelse(df$score_NDS >= 28, 1, 0)
+
+df$score_ADA <- risk_scoring(df, type = "ADA")
+df$score_ADA_ <- ifelse(df$score_ADA >= 5, 1, 0)
+
+df$score_NCDRS <- risk_scoring(df, type = "NCDRS")
+df$score_NCDRS_ <- ifelse(df$score_NCDRS >= 25, 1, 0)
+
+var <- "score_NCDRS"
+var2 <- ""
+gen_desc(df, vars = var, ordinalVars = var2, group = "case_healthy") 
+gen_desc(df, vars = var, ordinalVars = var2, group = "case_comorbid")
+gen_desc(df, vars = var, ordinalVars = var2, group = "case_prev") 
+gen_desc(df, vars = var, ordinalVars = var2, group = "case_inc")
 
 # exploratory analysis ----
 table <- combine_tables(NULL, exponentiate = TRUE,
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+I((pa_trans+pa_work_vig+pa_work_mod)>150), family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_work_mod, family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_trans, family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_recr_vig, family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_recr_mod, family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+sed_time_perday, family = binomial, data =  df),
-               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+checkup+pa_work_vig+pa_work_mod+pa_trans+pa_recr_vig+pa_recr_mod+sed_time_perday, family = binomial, data =  df)
+                        lm(pa_recr_vig~1+pa_recr_mod, data = df[df$case_prev_norm_ %!in% NA,]),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+BMI_recal, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+I(BMI_recal>23), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+I(BMI_recal>30), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension++I(smoking=="Currently smoke"), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension+I(smoking=="Currently smoke")+hse_type, data =  df),
+                        
+                        lm(pa_recr_mod~1+pa_recr_vig, data = df[df$case_prev_norm_ %!in% NA,]),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+BMI_recal, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+I(BMI_recal>23), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+I(BMI_recal>30), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension++I(smoking=="Currently smoke"), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_prev_norm_+age+I(age^2)+male+BMI_recal+hypertension+I(smoking=="Currently smoke")+hse_type, data =  df)
+)
+
+table <- combine_tables(NULL, exponentiate = TRUE,
+                        lm(pa_recr_vig~1+pa_recr_mod, data = df[df$case_inc_norm_ %!in% NA,]),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+BMI_recal, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+I(BMI_recal>23), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+I(BMI_recal>30), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension, data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension++I(smoking=="Currently smoke"), data =  df),
+                        lm(pa_recr_vig~1+pa_recr_mod+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension+I(smoking=="Currently smoke")+hse_type, data =  df),
+                        
+                        lm(pa_recr_mod~1+pa_recr_vig, data = df[df$case_inc_norm_ %!in% NA,]),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+BMI_recal, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+I(BMI_recal>23), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+I(BMI_recal>30), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension, data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension++I(smoking=="Currently smoke"), data =  df),
+                        lm(pa_recr_mod~1+pa_recr_vig+case_inc_norm_+age+I(age^2)+male+BMI_recal+hypertension+I(smoking=="Currently smoke")+hse_type, data =  df)
+)
+                        
+
+table <- combine_tables(NULL, exponentiate = TRUE,
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+I((pa_trans+pa_work_vig+pa_work_mod)>150), family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+pa_work_mod, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+pa_trans, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+pa_recr_vig, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+pa_recr_mod, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+sed_time_perday, family = binomial, data =  df),
+               glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+checkup+pa_work_vig+pa_work_mod+pa_trans+pa_recr_vig+pa_recr_mod+sed_time_perday, family = binomial, data =  df)
 )
 
 glm(case_inc~1+marital, family = binomial, data =  df) %>% summary
@@ -489,12 +938,12 @@ table <- combine_tables(NULL, exponentiate = TRUE,
                         glm(case_prev~1+age+male+educ+marital, family = binomial, data =  df),
                         glm(case_prev~1+age+male+educ+marital+econ_active, family = binomial, data =  df),
                         glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health, family = binomial, data =  df), 
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
+                        # glm(case_prev~1+age+male+educ+marital+econ_active+live.alone+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_prev~1+age+male+educ+marital+econ_active+live.alone+Family.history.DM+I(income_num/1000), family = binomial, data =  df),
+                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health, family = binomial, data =  df), 
+                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 table %>% clipr::write_clip()
 
@@ -502,18 +951,18 @@ table <- combine_tables(NULL, exponentiate = TRUE,
                         glm(case_prev~1, family = binomial, data =  df),
                         glm(case_prev~1+age, family = binomial, data =  df),
                         glm(case_prev~1+age+male, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health, family = binomial, data =  df), 
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup, family = binomial, data =  df),
-                        glm(case_prev~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
+                        glm(case_prev~1+age+male+HTcase_prev_norm_, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+live.alone+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+live.alone+Family.history.DM+I(income_num/1000), family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health, family = binomial, data =  df), 
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup, family = binomial, data =  df),
+                        glm(case_prev~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 
 table <- combine_tables(NULL, exponentiate = TRUE,
@@ -524,34 +973,34 @@ table <- combine_tables(NULL, exponentiate = TRUE,
                         glm(case_inc~1+age+male+educ+marital, family = binomial, data =  df),
                         glm(case_inc~1+age+male+educ+marital+econ_active, family = binomial, data =  df),
                         glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health, family = binomial, data =  df), 
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
+                        # glm(case_inc~1+age+male+educ+marital+econ_active+live.alone+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_inc~1+age+male+educ+marital+econ_active+live.alone+Family.history.DM+I(income_num/1000), family = binomial, data =  df),
+                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+health, family = binomial, data =  df), 
+                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 
 table <- combine_tables(NULL, exponentiate = TRUE,
                         glm(case_inc~1, family = binomial, data =  df),
                         glm(case_inc~1+age, family = binomial, data =  df),
                         glm(case_inc~1+age+male, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health, family = binomial, data =  df), 
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup, family = binomial, data =  df),
-                        glm(case_inc~1+age+male+HT_prev+hyperchol_prev+educ+marital+econ_active+I(income_num/1000)+live.alone+Family.history.DM+health+who_pa+checkup_freq, family = binomial, data =  df)
+                        glm(case_inc~1+age+male+HTcase_prev_norm_, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+live.alone+I(income_num/1000), family = binomial, data =  df),
+                        # glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+live.alone+Family.history.DM+I(income_num/1000), family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health, family = binomial, data =  df), 
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup, family = binomial, data =  df),
+                        glm(case_inc~1+age+male+HTcase_prev_norm_+cholcase_prev_norm_+educ+marital+econ_active+I(income_num/1000)+health+who_pa+checkup_freq, family = binomial, data =  df)
 )
 
-glm(case_prev~1+age+male+educ+I(income_num/1000)+live.alone+Family.history.DM+hyperchol_prev2, family = binomial, data =  df) %>% summary()
-glm(case_prev~1+hyperchol_prev, family = binomial, data =  df) %>% summary()
+glm(case_prev~1+age+male+educ+I(income_num/1000)+cholcase_prev_norm_2, family = binomial, data =  df) %>% summary()
+glm(case_prev~1+cholcase_prev_norm_, family = binomial, data =  df) %>% summary()
 
 explore_var <- function(df){
   table <- data.frame(matrix(ncol = 2,  nrow = 0))
