@@ -583,15 +583,22 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
   print(paste(dep_var))
   
   if (class(fit)[1] %in% "multinom"){
-  table[row_count, 1] <- paste0("Levels (ref = ", fit$lev[fit$lev %!in% row.names(coef(fit))], ")") # show reference level
-  table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- depvar_categories
-  
-  row_count <- row_count + 1
-  
-  table[row_count, 1] <- paste0("N of levels (", fit$lev[fit$lev %!in% row.names(coef(fit))],", N = ", table(model.frame(fit)[,dep_var])[fit$lev[fit$lev %!in% row.names(coef(fit))]], ")") # show reference level
-  table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- table(model.frame(fit)[,dep_var])[depvar_categories]
+    table[row_count, 1] <- "Reference level" # show reference level
+    table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- paste0(fit$lev[fit$lev %!in% row.names(coef(fit))], 
+                                                                                  " (N=", table(model.frame(fit)[,dep_var])[fit$lev[fit$lev %!in% row.names(coef(fit))]], 
+                                                                                  ")")
     
-  row_count <- row_count + 1
+    row_count <- row_count + 1 
+    
+    table[row_count, 1] <- "Levels" 
+    table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- depvar_categories
+    
+    row_count <- row_count + 1
+    
+    table[row_count, 1] <- "N of levels" # show reference level
+    table[row_count, col_count:(col_count+length(depvar_categories)-1)] <- table(model.frame(fit)[,dep_var])[depvar_categories]
+    
+    row_count <- row_count + 1
   }
   
   if (class(fit)[1] %in% "multinom"){
