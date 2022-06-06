@@ -626,7 +626,7 @@ gen_reg <- function(fit, dep_var = NULL, adjusted_r2 = FALSE, show_p = FALSE, sh
           )
         } 
         
-        p_value <- iferror(pnorm(beta/se, lower.tail=FALSE)*2, NA) # z-score = beta/se
+        p_value <- iferror(pnorm(abs(beta/se), lower.tail=FALSE)*2, NA) # z-score = beta/se
         
         # table[row_count, col_count] <-  paste0(n, ", ", starred_p(p_value, decimal_places, beta))
         if (show_p){
