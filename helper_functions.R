@@ -35,6 +35,7 @@
 ## gen_reg() generates the results for each model to be used by combine_tables() 
 ## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
 ## combinetab_loop() is a wrapper function for combine_tables for different dependent variables with a fixed set of explanatory variables
+## gen_desc() generates descriptive statistics (table 1)
 ## save_() works the same as save() with user-defined names for objects
 ## timeout_skip() skips when running time exceeds a set amount
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
@@ -750,6 +751,122 @@ combinetab_loop <- function(data, outcomes, formula){
     table <- plyr::join(table, table_temp, by = 1, type="full")
   }
   names(table)[names(table) == "X1"] <- ""
+  return(table)
+}
+
+gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = "time", show_NA = FALSE, both_tests = FALSE){ 
+  categories <- unique(data[[group]]) 
+  if (!show_NA){
+    categories <- categories[categories %!in% NA]
+  }
+  
+  table <- data.frame(matrix(ncol = (2 + length(categories) + 1),  nrow = 0))
+  
+  row_count <- 1 
+  col_label <- 2
+  
+  colnames(table)[1] <- ""
+  colnames(table)[col_label] <- ""
+  
+  for (i in (1:length(categories))){
+    assign(paste0("col_", i), col_label + i)
+    table[row_count, get_("col_", i)] <- categories[i]
+  }
+  
+  table[row_count, 1] <- group
+  
+  col_pval <- col_label + length(categories) + 1
+  colnames(table) <- rep("", ncol(table))
+  colnames(table)[col_pval] <- "p-value"
+  
+  row_count <- row_count + 1
+  
+  table[row_count, 1] <- "N"
+  table[row_count, col_label] <- ""
+  
+  
+  for (i in (1:length(categories))){
+    table[row_count, get_("col_", i)] <- length(data[[group]][data[[group]] %in% categories[i]])
+  }
+  
+  row_count <- row_count + 1
+  
+  get_mean_sd <- function(x){
+    mean <- mean(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
+    sd <- sd(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
+    return(paste0(mean, " (", sd, ")"))
+  }
+  
+  get_median_iqr <- function(x){
+    median <- median(x, na.rm = TRUE) %>% round_format(decimal_places = 0)
+    q1 <- quantile(x, probs =  0.25) %>% round_format(decimal_places = 0)
+    q3 <- quantile(x, probs =  0.75) %>% round_format(decimal_places = 0)
+    
+    return(paste0(median, " (", q1, "-", q3, ")"))
+  }
+  
+  for (var in vars){
+    print(var)
+    for (i in (1:length(categories))){
+      category <- categories[i]
+      
+      # if (class(data[[var]]) == "character") next()
+      # if (all(data[[var]][which(data[[group]] %in% category)] %in% NA)) next()
+      
+      if (var %in% ordinalVars){
+        
+        table[row_count, 1] <- var
+        
+        p_value <- ifwarning(chisq.test(x = data[[group]], y = data[[var]])[['p.value']], chisq.test(x = data[[group]], y = data[[var]], simulate.p.value = TRUE, B=3000)[['p.value']])
+        if (p_value < 0.001){
+          table[row_count, col_pval] <- "<0.001"
+        } else {
+          table[row_count, col_pval] <- p_value %>% round(digits = 3)
+        }
+        
+        row_count_ <- row_count # save count
+        total <- length(data[[var]][which(data[[group]] %in% category)])
+        
+        for (val in unique(data[[var]])[order(unique(data[[var]]))]){
+          table[row_count, col_label] <- val
+          
+          if (val %in% NA){
+            table[row_count, col_label] <- "N/A"
+          }
+          
+          n <-  length(data[[var]][which(data[[var]] %in% val & data[[group]] %in% category)])
+          
+          table[row_count, get_("col_", i)] <- paste0(n, " (", round_format(n/total*100, 1), "%)")
+          
+          if(n > 0) {row_count <- row_count + 1} 
+        }
+        
+        row_count__ <- row_count
+        row_count <- row_count_ # reset count
+      } 
+      
+      if (var %!in% ordinalVars){
+        
+        table[row_count, 1] <- var
+        
+        anova.test <- aov(formula(paste0(var, " ~ ", group)),  data = data) %>% summary()
+        p_value <- anova.test[[1]][["Pr(>F)"]][[1]]
+        if (p_value < 0.001){
+          table[row_count, col_pval] <- "<0.001"
+        } else {
+          table[row_count, col_pval] <- p_value %>% round(digits = 3)
+        }
+        
+        table[row_count, col_label] <- "mean (sd)"
+        table[row_count, get_("col_", i)] <-  get_mean_sd(data[[var]][which(data[[group]] %in% category)])
+        
+      }
+      
+    }
+    
+    row_count <- iferror(row_count__, row_count + 1)
+    ifwarning(rm(row_count__), NA)
+  }
   return(table)
 }
 
