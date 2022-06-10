@@ -145,7 +145,7 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_sum", "Diet score")), dim = c(2,34)))
 
 # restrict sample to age >= 60 ----
-cutoff_date <- as.Date('2022-03-31')
+cutoff_date <- as.Date('2022-05-31')
 df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age.r1 >= 60),]
@@ -620,7 +620,7 @@ temp$covid_4th <- ifelse(temp$ehealth_eval_timestamp >= as.Date('2020-11-01') &
                            temp$ehealth_eval_timestamp <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
 
 temp$covid_5th <- ifelse(temp$ehealth_eval_timestamp >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
-                           # & temp$ehealth_eval_timestamp <= as.Date('2022-06-31')
+                           & temp$ehealth_eval_timestamp <= as.Date('2022-04-21') # gov social distancing measures easing from 21st April 2022
                          , 1, 0)
 
 temp$covid <- ifelse(temp$covid_3rd %in% 1 | temp$covid_4th %in% 1 | temp$covid_5th %in% 1, 1, 0)

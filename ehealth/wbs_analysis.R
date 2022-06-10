@@ -33,7 +33,7 @@ df$time <- car::recode(df$evaluation_event, "
 val_labels(df$time) <- NULL
 
 # sample restriction and variable list ----
-df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2022-03-31'),]
+df <- df[as.Date(df$ehealth_eval_timestamp) <= as.Date('2022-05-21'),]
 
 vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
           "Phase1_member_self_report", "DH_centre_member", "Carer", "Hypertension", "Hypertension_HA",
@@ -105,6 +105,21 @@ wbs$low_wellbeing <- ifelse(wbs$Satisfaction %in% c(1:3) |
                               wbs$Meaning_of_life %in% c(1:3) |
                               wbs$Happiness %in% c(0:3), 1, 0)
 
+# COVID waves 3-5 ----
+import_func("ehealth_analysis.R")
+# start defined as new cases >= 15 for 3 days, end defined as new cases < 15 for 3 days (roughly)
+wbs$covid_3rd <- ifelse(wbs$wbs_survey_date >= as.Date('2020-07-01') & 
+                           wbs$wbs_survey_date <= as.Date('2020-09-15'), 1, 0) # https://www.thelancet.com/journals/lanwpc/article/PIIS2666-6065(21)00039-0/fulltext
+
+wbs$covid_4th <- ifelse(wbs$wbs_survey_date >= as.Date('2020-11-01') & 
+                           wbs$wbs_survey_date <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
+
+wbs$covid_5th <- ifelse(wbs$wbs_survey_date >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
+                         # & wbs$wbs_survey_date <= as.Date('2022-06-31')
+                         , 1, 0)
+
+wbs$covid <- ifelse(wbs$covid_3rd %in% 1 | wbs$covid_4th %in% 1 | wbs$covid_5th %in% 1, 1, 0)
+
 # wbswide sample restriction and variable list ----
 # temp <- wbs[wbs$risk_score>=5 & wbs$risk_score<=25,]
 temp <- wbs
@@ -145,12 +160,6 @@ varlist <- t(array(c(
 dim = c(2,24))) %>% as.data.frame()
 
 # pre-post results ----
-temp <- wbs
-# # high risk at 1st round WBS & did baseline
-temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-03-31'),]
-temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
-temp <- temp[temp$member_id %in% df$member_id,]
-
 # # restrict baseline risk score
 # temp <-  reshape(data=temp, idvar=  "member_id",
 #                  sep = ".r", 
@@ -189,47 +198,18 @@ temp <- temp[temp$member_id %in% df$member_id,]
 #               times = 1:2,
 #               direction = "long")
 
+temp <- wbs
+# # high risk at 1st round WBS & did baseline
+temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-03-31'),]
+temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
+temp <- temp[temp$member_id %in% df$member_id,]
+# temp <- temp[temp$covid %in% 0, ]
+
 # # low risk at 1st round WBS & not done baseline
-# temp <- wbs
 # temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-02-28'),]
 # temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level %in% c(1, 2)], ]
 # temp <- temp[temp$member_id %!in% df$member_id,]
-
-import_func("ehealth_analysis.R")
-Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
-gen_table(temp %>% filter(), id = "member_id", group = "Round", to_English = FALSE, vars = allVars, 
-          # ordinalVars = ordinalVars, 
-          nominalVars =  NULL, show_levels = FALSE, p_decimal = 100) %>% clipr::write_clip()
-Sys.setlocale(locale =  "eng") 
-
-# COVID waves 3-5 ----
-import_func("ehealth_analysis.R")
-temp <- wbs
-
-# start defined as new cases >= 15 for 3 days, end defined as new cases < 15 for 3 days (roughly)
-temp$covid_3rd <- ifelse(temp$wbs_survey_date >= as.Date('2020-07-01') & 
-                           temp$wbs_survey_date <= as.Date('2020-09-15'), 1, 0) # https://www.thelancet.com/journals/lanwpc/article/PIIS2666-6065(21)00039-0/fulltext
-
-temp$covid_4th <- ifelse(temp$wbs_survey_date >= as.Date('2020-11-01') & 
-                           temp$wbs_survey_date <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
-
-temp$covid_5th <- ifelse(temp$wbs_survey_date >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
-                         # & temp$wbs_survey_date <= as.Date('2022-06-31')
-                         , 1, 0)
-
-temp$covid <- ifelse(temp$covid_3rd %in% 1 | temp$covid_4th %in% 1 | temp$covid_5th %in% 1, 1, 0)
-
-# # # high risk at 1st round WBS & did baseline
-# temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-03-31'),]
-# temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
-# temp <- temp[temp$member_id %in% df$member_id,]
 # temp <- temp[temp$covid %in% 0, ]
-
-# low risk at 1st round WBS & not done baseline
-temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-02-28'),]
-temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level %in% c(1, 2)], ]
-temp <- temp[temp$member_id %!in% df$member_id,]
-temp <- temp[temp$covid %in% 0, ]
 
 import_func("ehealth_analysis.R")
 Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
@@ -237,7 +217,6 @@ gen_table(temp, id = "member_id", group = "Round", to_English = FALSE, vars = al
           # ordinalVars = ordinalVars, 
           nominalVars =  NULL, show_levels = FALSE, decimal = 3) %>% clipr::write_clip()
 Sys.setlocale(locale =  "eng") 
-
 
 # predictors of outcome change ----
 temp <- wbs
@@ -360,6 +339,7 @@ blue <- "#6c7cd9"
 yellow <- "#ffe873"
 
 temp <- wbswide
+temp <- wbswide[wbswide$gender.r1 %in% "F", ]
 # temp <- wbswide %>% filter(wbswide$risk_score.r1 >= 7, wbswide$risk_score.r1 <=20)
 plot_rdd <- function(outcome, data = wbswide, p = 1, y0 = FALSE){
   require(patchwork)
@@ -402,7 +382,7 @@ plot_rdd <- function(outcome, data = wbswide, p = 1, y0 = FALSE){
 
 plot_rdd("SAR_total", 
          data =  temp, 
-         # p = 3, 
+         p = 3,
          # y0 = TRUE
          )
 
@@ -412,7 +392,7 @@ pdf("plot_RDD_temp.pdf", height = 28/2.54/1.6, width = 50/2.54/1.6)
 for (outcome in varlist[,1]){
   plot <- plot_rdd(outcome
                    , data = temp
-                   # , p = 3
+                   , p = 3
                    # , y0 = TRUE
                    )
   print(plot)
@@ -422,7 +402,7 @@ dev.off()
 library(pdftools)
 pdf_subset('plot_RDD_temp.pdf',
            pages = (1:pdf_length('plot_RDD_temp.pdf'))[seq(3, pdf_length('plot_RDD_temp.pdf'), 3)], 
-           output = "plot_RDD.pdf")
+           output = "plot_RDD_f.pdf")
 
 if (file.exists('plot_RDD_temp.pdf')) {
   file.remove('plot_RDD_temp.pdf')
@@ -443,13 +423,29 @@ rdplotdensity(rdd = test_density,
               type = "both")
 
 # RDD regression results ----
-temp <- wbswide %>% filter(wbswide$risk_score.r1 >= 7, wbswide$risk_score.r1 <=20)
-outcome <- "SAR_total" 
+temp <- wbswide
+temp <- wbswide[wbswide$gender.r1 %in% "M", ]
+# %>% filter(wbswide$risk_score.r1 >= 7, wbswide$risk_score.r1 <=20)
+
+temp$D <- ifelse(temp$risk_score.r1 >= 14, 1, 0)
+temp$D_gender.r1 <- temp$D * (temp$gender.r1 %in% "M")
+temp$D_age.r1 <- temp$D * temp$Age.r1 
+
+lm(poor_health.r2~D+risk_score.r1+poor_health.r1+Age.r1, data =temp[temp$gender.r1 %in% "M",]) %>% summary()
+lm(poor_health.r2~D+risk_score.r1+poor_health.r1+Age.r1, data =temp[temp$gender.r1 %in% "F",]) %>% summary()
+
+
+lm(poor_health.r2~D+risk_score.r1+poor_health.r1+Age.r1, data =temp) %>% summary()
+
+outcome <- "poor_health" 
 rdd_data(y = temp[[paste0(outcome, ".r2")]],
          x = temp$risk_score.r1,
-         covar =  data.frame(y_t0 = temp[[paste0(outcome, ".r1")]], 
-                             Age.r1 = temp[["Age.r1"]], 
-                             gender.r1 = temp[["gender.r1"]]),
+         covar =  data.frame(y_t0 = temp[[paste0(outcome, ".r1")]]
+                             , Age.r1 = temp[["Age.r1"]]
+                             , gender.r1 = temp[["gender.r1"]]
+                             # , gender.r1 = temp[["D_gender.r1"]]
+                             # , gender.r1 = temp[["D_age.r1"]]
+                             ),
          # z =  temp$risk_level_h.r1,
          cutpoint = 14
          ) %>% 
@@ -457,13 +453,15 @@ rdd_data(y = temp[[paste0(outcome, ".r2")]],
               # family=binomial(),
               family=gaussian(),
               slope = "same",
-              covariates = list(c("y_t0", "Age.r1", "gender.r1"))
+              covariates = list(c("y_t0", "Age.r1", "gender.r1", "D_gender.r1", "D_age.r1"))
               # , order = 3
               ) %>%
   # plot()
   # dens_test()
   summary()
 
+
+temp <- wbswide[wbswide$gender.r1 %in% "F", ]
 table <- data.frame()
 for (outcome in varlist[,1]){
   print(outcome)
@@ -477,32 +475,38 @@ for (outcome in varlist[,1]){
     fit <- rdd_data(y = temp[[paste0(outcome, ".r2")]],
                     x = temp$risk_score.r1,
                     covar =  data.frame(y_t0 = temp[[paste0(outcome, ".r1")]], 
-                                        Age.r1 = temp[["Age.r1"]], 
-                                        gender.r1 = temp[["gender.r1"]]),
+                                        Age.r1 = temp[["Age.r1"]]
+                                        # , gender.r1 = temp[["gender.r1"]]
+                                        ),
                     # z =  temp$risk_level_h.r1,
                     cutpoint = 14
     ) %>%   rdd_gen_reg(fun= glm, 
                         family=binomial(),
                         # family=gaussian(),
                         slope = "separate",
-                        covariates = list(c("y_t0", "Age.r1", "gender.r1"))
-                        # , order = 3
+                        covariates = list(c("y_t0", "Age.r1"
+                                            # , "gender.r1"
+                                            ))
+                        , order = 3
     )
   } else {
     is_logistic <- FALSE
     fit <- rdd_data(y = temp[[paste0(outcome, ".r2")]],
                     x = temp$risk_score.r1,
                     covar =  data.frame(y_t0 = temp[[paste0(outcome, ".r1")]], 
-                                        Age.r1 = temp[["Age.r1"]], 
-                                        gender.r1 = temp[["gender.r1"]]),
+                                        Age.r1 = temp[["Age.r1"]]
+                                        # , gender.r1 = temp[["gender.r1"]]
+                                        ),
                     # z =  temp$risk_level_h.r1,
                     cutpoint = 14
                     ) %>%   rdd_gen_reg(fun= glm, 
                                         # family=binomial(),
                                         family=gaussian(),
                                         slope = "separate",
-                                        covariates = list(c("y_t0", "Age.r1", "gender.r1"))
-                                        # , order = 3
+                                        covariates = list(c("y_t0", "Age.r1"
+                                                            # , "gender.r1"
+                                                            ))
+                                        , order = 3
                                         )
   }
   

@@ -771,14 +771,17 @@ temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_leve
 temp <- temp[temp$member_id %in% df$member_id,]
 temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
               by=c("member_id"), all.x = TRUE)
+temp <- merge(temp, df[, c("member_id", "f2f_telemode_num", "telemode_num", "f2f_num", "telemode_pct")], # extract item matched by member ID
+              by=c("member_id"), all.x = TRUE)
+# temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-02-28'),]
 
 table <- data.frame()
-for (outcome in wbs_outcomes[7]){
+for (outcome in wbs_outcomes){
   table_temp <- combine_tables(NULL, 
                                exponentiate = FALSE,
                                decimal_places = 3,
                          dep_var = paste0(outcome),
-                         lmer(get(outcome)~ 1+gender+age_group+risk_score.r1+Round*Total+ (1| member_id) , REML = TRUE, data = temp)
+                         lmer(get(outcome)~ 1+gender+age_group+risk_score.r1+Round*telemode_num+ (1| member_id) , REML = TRUE, data = temp)
   )
   table <- merge(table, table_temp, all = TRUE)
   if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time

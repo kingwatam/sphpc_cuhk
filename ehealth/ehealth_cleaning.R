@@ -12,7 +12,7 @@ library(ggplot2)
 
 Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-04-08_1121.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-06-01_0930.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -122,7 +122,7 @@ wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-04-09.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-05-21.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
