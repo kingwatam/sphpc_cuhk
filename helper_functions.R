@@ -738,14 +738,14 @@ combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALS
   return(table)
 }
 
-combinetab_loop <- function(data, outcomes, formula){
+combinetab_loop <- function(data, outcomes, formula, exponentiate = FALSE, decimal_places = 3, reg_model = lm, ...){
   table <- data.frame()
   for (outcome in outcomes){
     table_temp <- combine_tables(NULL, 
-                                 exponentiate = FALSE,
-                                 decimal_places = 3,
+                                 exponentiate = exponentiate,
+                                 decimal_places = decimal_places,
                                  dep_var = paste0(outcome),
-                                 lm(paste0(outcome, formula), data = data)
+                                 reg_model(paste0(outcome, formula), data = data, ...)
     )
     if (nrow(table) == 0) table <- merge(table, table_temp, all = TRUE) # merge again first time
     table <- plyr::join(table, table_temp, by = 1, type="full")
