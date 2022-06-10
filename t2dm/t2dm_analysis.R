@@ -266,10 +266,10 @@ df$who_pa_mod <- ifelse(df$pa_mod >= 30, 1, 0)
 df$who_pa_trans <- ifelse(df$pa_trans >= 110, 1, 0)
 
 
-df$pa_work_prop <- df$MET_work/df$MET_week_con
-df$pa_recr_prop <- df$MET_recr/df$MET_week_con
-df$pa_trans_prop <- df$MET_trans/df$MET_week_con
-df$pa_work_trans_prop <- df$MET_work_trans/df$MET_week_con
+df$pa_work_prop <- ifelse(df$MET_week_con %in% 0, 0, df$MET_work/df$MET_week_con)
+df$pa_recr_prop <-  ifelse(df$MET_week_con %in% 0, 0, df$MET_recr/df$MET_week_con)
+df$pa_trans_prop <-  ifelse(df$MET_week_con %in% 0, 0, df$MET_trans/df$MET_week_con)
+df$pa_work_trans_prop <-  ifelse(df$MET_week_con %in% 0, 0, df$MET_work_trans/df$MET_week_con)
 
 df$pa_work <- df$pa_work_mod + df$pa_work_vig
 df$pa_recr <- df$pa_recr_mod + df$pa_recr_vig
@@ -393,138 +393,16 @@ df$bmi_cat <- with(df,
                      BMI_recal >= 30  ~ ">=30")) 
 df$bmi_cat <- factor(df$bmi_cat, levels = c("< 20", "20-23", "23-25", "25-27.5", "27.5-30", ">=30"))
 
+# create variables ----
+df$age_cat_ <- recode_age(df$age, age_labels = c("0-34", "35-44", "45-54", "55-64", "65-74", "75+"))
+df$age_cat_ <- car::recode(df$age_cat_, " '0-34' = '15-34' ") # min age for PHS survey is 15
+
+df$married <- ifelse(df$marital %in% "Married", 1, 0)
+df$public_hse <- ifelse(df$hse_type %in% "Public rental housing", 1, 0)
+
 # # save data ----
 # save(df, file = "t2dm_data.RData")
 # haven::write_sav(df, "t2dm_data.sav")
-
-# generate descriptive statistics ----
-gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = "time", show_NA = FALSE, both_tests = FALSE){ 
-  categories <- unique(df[[group]]) 
-  if (!show_NA){
-    categories <- categories[categories %!in% NA]
-  }
-  
-  table <- data.frame(matrix(ncol = (2 + length(categories) + 1),  nrow = 0))
-  
-  row_count <- 1 
-  col_label <- 2
-  
-  colnames(table)[1] <- ""
-  colnames(table)[col_label] <- ""
-  
-  for (i in (1:length(categories))){
-    assign(paste0("col_", i), col_label + i)
-    table[row_count, get_("col_", i)] <- categories[i]
-  }
-  
-  table[row_count, 1] <- group
-  
-  col_pval <- col_label + length(categories) + 1
-  colnames(table) <- rep("", ncol(table))
-  colnames(table)[col_pval] <- "p-value"
-  
-  row_count <- row_count + 1
-  
-  table[row_count, 1] <- "N"
-  table[row_count, col_label] <- ""
-
-  
-  for (i in (1:length(categories))){
-    table[row_count, get_("col_", i)] <- length(data[[group]][data[[group]] %in% categories[i]])
-  }
-  
-  row_count <- row_count + 1
-  
-  get_mean_sd <- function(x){
-    mean <- mean(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
-    sd <- sd(x, na.rm = TRUE) %>% round_format(decimal_places = 2)
-    return(paste0(mean, " (", sd, ")"))
-  }
-  
-  get_median_iqr <- function(x){
-    median <- median(x, na.rm = TRUE) %>% round_format(decimal_places = 0)
-    q1 <- quantile(x, probs =  0.25) %>% round_format(decimal_places = 0)
-    q3 <- quantile(x, probs =  0.75) %>% round_format(decimal_places = 0)
-    
-    return(paste0(median, " (", q1, "-", q3, ")"))
-  }
-  
-  for (var in vars){
-    print(var)
-    for (i in (1:length(categories))){
-      category <- categories[i]
-      
-      # if (class(df[[var]]) == "character") next()
-      # if (all(df[[var]][which(df[[group]] %in% category)] %in% NA)) next()
-      
-      if (var %in% ordinalVars){
-
-        table[row_count, 1] <- var
-        
-        p_value <- ifwarning(chisq.test(x = df[[group]], y = df[[var]])[['p.value']], chisq.test(x = df[[group]], y = df[[var]], simulate.p.value = TRUE, B=3000)[['p.value']])
-        if (p_value < 0.001){
-          table[row_count, col_pval] <- "<0.001"
-        } else {
-          table[row_count, col_pval] <- p_value %>% round(digits = 3)
-        }
-
-        row_count_ <- row_count # save count
-        total <- length(df[[var]][which(df[[group]] %in% category)])
-        
-        for (val in unique(df[[var]])[order(unique(df[[var]]))]){
-          table[row_count, col_label] <- val
-          
-          if (val %in% NA){
-            table[row_count, col_label] <- "N/A"
-          }
-          
-          n <-  length(df[[var]][which(df[[var]] %in% val & df[[group]] %in% category)])
-          
-          table[row_count, get_("col_", i)] <- paste0(n, " (", round_format(n/total*100, 1), "%)")
-          
-          if(n > 0) {row_count <- row_count + 1} 
-        }
-        
-        row_count__ <- row_count
-        row_count <- row_count_ # reset count
-      } 
-      
-      if (var %!in% ordinalVars){
-
-        table[row_count, 1] <- var
-        
-        anova.test <- aov(formula(paste0(var, " ~ ", group)),  data = df) %>% summary()
-        p_value <- anova.test[[1]][["Pr(>F)"]][[1]]
-        if (p_value < 0.001){
-          table[row_count, col_pval] <- "<0.001"
-        } else {
-          table[row_count, col_pval] <- p_value %>% round(digits = 3)
-        }
-        
-        table[row_count, col_label] <- "mean (sd)"
-        table[row_count, get_("col_", i)] <-  get_mean_sd(df[[var]][which(df[[group]] %in% category)])
-        
-      }
-      
-    }
-    
-    row_count <- iferror(row_count__, row_count + 1)
-    ifwarning(rm(row_count__), NA)
-  }
-  return(table)
-}
-
-allVars <- c("age", "age_cat", "sex", "educ", "marital", "econ", "econ_active", "occup", "income_num", "income_cat3", "district", "hse_income", "hse_type", 
-             # "live.alone", "Family.history.DM", 
-             "health", "who_pa", "checkup", "checkup_freq", "family_doctor", "BMI_recal")
-catVars <- c("age_cat", "sex", "educ", "marital", "econ", "occup", "income_cat3", "district", "hse_income", "hse_type", "checkup_freq", "HT_prev", "hyperchol_prev")
-
-allVars <- c(allVars , "MET_week_con", "MET_work", "MET_trans", "MET_recr", 
-             "pa_work_prop", "pa_trans_prop", "pa_recr_prop", 
-             "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "pa_vig", "pa_mod", "sed_time_perday"
-             )
-
-gen_desc(df, vars = allVars, ordinalVars = catVars, medianVars = NULL, group = "case_inc") %>% clipr::write_clip()
 
 # causal diagram ----
 dagitty::dagitty('
@@ -585,106 +463,115 @@ library(nnet)
 library(stargazer)
 # library(mlogit)
 
-
 df$case_inc_norm_ <- relevel(as.factor(df$case_inc_norm_), ref = "Normal")
 # df$case_inc_norm_ <- relevel(as.factor(df$case_inc_norm_), ref = "Incident")
 
 df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Normal")
 # df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Prevalent")
 
-
-df$age_cat_ <- recode_age(df$age, age_labels = c("0-34", "35-44", "45-54", "55-64", "65-74", "75+"))
-df$age_cat_ <- car::recode(df$age_cat_, " '0-34' = '15-34' ") # min age for PHS survey is 15
-
-multinom_model <- multinom(case_inc_norm_ ~ age
-                           + I(age^2)
+temp <- df
+temp <- temp[temp$male == 1, ]
+multinom_model <- multinom(case_inc_norm_ ~ age_cat_
+                           # + I(age^2)
                            + male
-                           # + scale(Waist_circum)
-                           # + scale(WHR)
+                           # + Waist_circum
+                           # + WHR
                            # + as.factor(bmi_cat)
-                           # + scale(BMI_recal)
-                           + health+who_pa
+                           # + BMI_recal
+                           + health
+                           + who_pa
                            + hypertension
                            + I(smoking=="Currently smoke")
-                           + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                           # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
+                           + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male+hse_income
                            # + MET_week_con
                            # + MET_work + MET_trans + MET_recr
                            # + pa_work_prop + pa_trans_prop + pa_recr_prop
                            + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                           + sed_time_perday
+                           + I(sed_time_perday/60)
                            # + pa_vig + pa_mod
-                           , data = df) 
+                           , data = temp) 
 
+multinom_model %>%
+  stargazer(type="text", style = "default",
+            apply.coef = exp,
+            star.cutoffs = c(0.05, 0.01, 0.001),
+            report=('vc*p'),
+            ci = TRUE,
+            t.auto=FALSE, p.auto=FALSE,
+            add.lines = list(c("n", nrow(multinom_model$residuals), nrow(multinom_model$residuals)))) %>% clipr::write_clip()
 
-glm_model <- glm(I(case_norm_=="Undiagnosed")~1+age+I(age^2)+male
+glm_model <- glm(I(case_norm_=="Undiagnosed")~1+age_cat_
+                 # +I(age^2)
+                 +male
                  # + scale(Waist_circum)
                  # + scale(WHR)
                  # + as.factor(bmi_cat)
                  # + scale(BMI_recal)
-                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                 # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
+                 + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
                  +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
                  +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                 + sed_time_perday
-                 , family = binomial, data =  df)
+                 + I(sed_time_perday/60)
+                 , family = binomial, data =  temp)
 
-glm_model1 <- glm(I(case_norm_=="Undiagnosed")~1+age+I(age^2)+male
+glm_model1 <- glm(I(case_norm_=="Undiagnosed")~1+age_cat_
+                  # +I(age^2)
+                 + male
                  + Waist_circum
                  + WHR
                  # + as.factor(bmi_cat)
                  + BMI_recal
-                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+                 # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
+                 + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
                  +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
                  +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                 + sed_time_perday
-                 , family = binomial, data =  df)
+                 + I(sed_time_perday/60)
+                 , family = binomial, data =  temp)
 
-glm_model2 <- glm(case_inc~1+age+I(age^2)+male
-                 + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+glm_model2 <- glm(case_inc~1+age_cat_
+                  # +I(age^2)
+                  +male
+                  # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
+                 + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
                  # + live.alone
                  + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
                  +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                 + sed_time_perday
-                 , family = binomial, data =  df)
+                 + I(sed_time_perday/60)
+                 , family = binomial, data =  temp)
 
-glm_model3 <- glm(case_prev~1+age+I(age^2)+male
-                  + hse_type+educ+marital+econ_active+I(income_num/1000)+checkup_freq
+glm_model3 <- glm(case_prev~1+age_cat_
+                  # +I(age^2)
+                  +male
+                  # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
+                  + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
                   # + live.alone
                   + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                   # + MET_work + MET_trans + MET_recr
                   # + pa_work_prop + pa_trans_prop + pa_recr_prop
                   +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                  + sed_time_perday
-                  , family = binomial, data =  df)
+                  + I(sed_time_perday/60)
+                  , family = binomial, data =  temp)
 
 table <- combine_tables(NULL, 
-                             exponentiate = TRUE,
-                             decimal_places = 3,
-                             # dep_var = paste0(outcome),
-                             multinom_model,
-                             update(multinom_model, case_prev_norm_ ~ . )
-                             , glm_model
-                             , glm_model1
-                             # , glm_model2
-                             # , glm_model3
+                        exponentiate = TRUE,
+                        decimal_places = 3,
+                        show_CI = T,
+                        # dep_var = paste0(outcome),
+                        multinom_model,
+                        update(multinom_model, case_prev_norm_ ~ . )
+                        # , glm_model
+                        # , glm_model1
+                        , glm_model2
+                        , glm_model3
 )
 table %>% clipr::write_clip()
-
-multinom_model %>% 
-  stargazer(type="text", style = "default",  
-            # apply.coef = exp,
-            star.cutoffs = c(0.05, 0.01, 0.001),
-            report=('vc*p'),
-            ci = TRUE,
-            t.auto=FALSE, p.auto=FALSE, 
-            add.lines = list(c("n", nrow(multinom_model$residuals), nrow(multinom_model$residuals)))) %>% clipr::write_clip()
-
-
 
 glm(health ~ age
     # + I(age ^ 2)
@@ -702,6 +589,32 @@ glm(health ~ age
     + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod + pa_vig + pa_mod + sed_time_perday
     , family = gaussian, data = df) %>%
   stargazer(type="text", style = "default",  apply.coef = exp, ci = TRUE, t.auto=FALSE, p.auto=FALSE, nobs = TRUE)
+
+# generate descriptive statistics ----
+df$current_smoker <- ifelse(df$smoking %in% "Currently smoke", 1, 0)
+
+allVars <- c("age", "age_cat_", "sex",
+             "health", "who_pa", "hypertension", "current_smoker", "checkup", 
+             # "checkup_freq", 
+             "hse_type",  "educ", "married",
+             # "marital", "econ", "occup",
+             "econ_active",  "income_num", "income_cat6",
+             # , "district", "hse_income", "live.alone", "Family.history.DM"
+             # , "family_doctor", "BMI_recal"
+             "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "sed_time_perday"
+             )
+catVars <- c("age_cat_", "sex", "educ", "marital", "econ", "occup", "income_cat6", "district", "hse_income", "hse_type", "checkup_freq", "HT_prev", "hyperchol_prev",
+             "who_pa", "hypertension", "current_smoker", "checkup", "econ_active", "hse_income")
+
+allVars <- c(allVars , 
+             "MET_week_con", "MET_work", "MET_trans", "MET_recr",
+             "pa_work_prop", "pa_trans_prop", "pa_recr_prop", "pa_vig", "pa_mod"
+             , "hse_income"
+)
+
+temp <- df[complete.cases(df[, c(allVars)]),]
+# temp <- temp %>% filter(case_inc_norm_ %!in% "Undiagnosed")
+gen_desc(temp, vars = allVars, ordinalVars = catVars, medianVars = NULL, group = "case_inc_norm_") %>% clipr::write_clip()
 
 # is-lasso ----
 # dep_var <- "case_prev"
