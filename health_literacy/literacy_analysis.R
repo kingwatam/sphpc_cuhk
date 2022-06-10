@@ -33,8 +33,8 @@ df$AGE <- as.numeric(df$AGE)
 # 
 # df <- cbind(df, scoring(df))
 
-df$age_cat <- recode_age(df$AGE, second_group = 50, interval = 5, last_group = 80)
-df$age_cat <- car::recode(df$age_cat, " c('0-49', '80+') = NA ") # age range 50-74
+df$age_cat <- recode_age(df$AGE, second_group = 50, interval = 5, last_group = 65)
+df$age_cat <- car::recode(df$age_cat, " c('0-49') = NA ") # age range 50-74
 
 names(df)[names(df)=="3C"] <- "educ"
 names(df)[names(df)=="3D"] <- "marital"
@@ -53,6 +53,15 @@ for (var in disease_vars){
 }
 
 df$cd_nocancer <- ifelse(df$OWN_CA %in% "Yes", df$cd-1, df$cd)
+
+df$educ2 <- car::recode(df$educ, "
+1:2 = 'Primary school or below';
+3 = 'Secondary 1-3';
+4:5 = 'Secondary 4-7';
+6:7 = 'College/university or above'
+")
+
+df$educ2 <- factor(df$educ2, levels =  c('Primary school or below', 'Secondary 1-3', 'Secondary 4-7', 'College/university or above'))
 
 df$educ <- car::recode(df$educ, "
 1 = 'No formal schooling';
@@ -80,6 +89,13 @@ df$hkborn <- car::recode(df$hkborn, "
 ")
 df$hkborn <- factor(df$hkborn, levels =  c('Yes', 'No'))
 
+df$income2 <- car::recode(df$income, "
+1='5,000 or below';2='5,001-10,000'; 3='10,001-15,000'; 4='15,001-20,000'; 5:6='20,001-30,000'; 7:8='30,001-40,000'; 9='40,000 or above'; 10=NA
+")
+
+df$income2 <- factor(df$income2, levels = c('5,000 or below','5,001-10,000', '10,001-15,000', '15,001-20,000', '20,001-30,000', '30,001-40,000', '40,000 or above'))
+
+
 df$income <- car::recode(df$income, "
 1='5,000 or below';2='5,001-10,000'; 3='10,001-15,000'; 4='15,001-20,000'; 5='20,001-25,000'; 
 6='25,001-30,000'; 7='30,001-35,000'; 8='35,001-40,000'; 9='40,000 or above'; 10=NA
@@ -87,6 +103,15 @@ df$income <- car::recode(df$income, "
 
 df$income <- factor(df$income, levels = c('5,000 or below','5,001-10,000', '10,001-15,000', '15,001-20,000', '20,001-25,000', 
                                           '25,001-30,000', '30,001-35,000', '35,001-40,000', '40,000 or above'))
+
+
+df$hse_income2 <- car::recode(df$hse_income, "
+1='10,000 or below'; 3:4='10,001-20,000'; 5:6='20,001-30,000'; 7:8='30,001-40,000'; 9='40,000 or above'; 10=NA
+")
+
+df$hse_income2 <- factor(df$hse_income2, levels = c('10,000 or below', '10,001-20,000', '20,001-30,000', 
+                                                   '30,001-40,000', '40,000+'))
+
 
 df$hse_income <- car::recode(df$hse_income, "
 1='5,000 or below';2='5,001-10,000'; 3='10,001-15,000'; 4='15,001-20,000'; 5='20,001-25,000'; 
@@ -101,6 +126,12 @@ df$health <- car::recode(df$health, "1='Excellent'; 2='Good'; 3='Fair'; 4='Poor'
 
 df$health <- factor(df$health, levels = c('Excellent', 'Good', 'Fair', 'Poor', 'Very poor'))
 
+df$HLCat3 <- car::recode(df$HLCat, "
+1 = 'Inadequate';
+2 = 'Problematic';
+3:4 = 'Sufficient/Excellent';
+")
+
 df$HLCat <- car::recode(df$HLCat, "
 1 = 'Inadequate';
 2 = 'Problematic';
@@ -109,34 +140,45 @@ df$HLCat <- car::recode(df$HLCat, "
 ")
 
 df$HLCat <- factor(df$HLCat, levels = c("Inadequate", "Problematic", "Sufficient", "Excellent"))
+df$HLCat3 <- factor(df$HLCat3, levels = c("Inadequate", "Problematic", "Sufficient/Excellent"))
+
+df$concordant_B1 <- ifelse(df$Modrisk_Breast %in% 1 & df$B_1 %in% 1:2, 1, 
+                           ifelse(df$Modrisk_Breast %in% 0 & df$B_1 %in% 3:4, 1, 0))
 
 # descriptive statistics ----
-allVars <- c("AGE", "age_cat", "WAIST", "BMI", "educ", "marital", "econ", "hkborn", "income", "hse_income", "health", "HL", "HLCat", 
-             "cd", "DM", "LIVER", "HYPER", "LIPID", "IHD", "COAD", "STROKE", "CIRRHOSIS", "GERD", "COMOR_OTHER", "OWN_CA")
-catVars <- c("age_cat", "educ", "marital", "econ", "hkborn", "income", "hse_income", "health", "HLCat",
-             "DM", "LIVER", "HYPER", "LIPID", "IHD", "COAD", "STROKE", "CIRRHOSIS", "GERD", "COMOR_OTHER", "OWN_CA")
+allVars <- c("AGE", "age_cat", "WAIST", "BMI", "educ2", "marital", "econ", "hkborn", "income2", "hse_income2", "health", "HL", "HLCat3", 
+             "cd", "DM", "LIVER", "HYPER", "LIPID", "IHD", "COAD", "STROKE", "CIRRHOSIS", "GERD", "COMOR_OTHER", "OWN_CA", "cd_nocancer",
+             "B_1", "B_2", "B_3", "B_4A", "B_4B", "B_4C", "B_4D", "B_4E", "B_4F", "B_4G", "B_4H", "B_4I", "B_4J", "B_4K", "B_4L", 
+             "B_5A", "B_5B", "B_5C", "B_5D", "B_5E", "B_5F", "B_5G", "concordant_B1")
+catVars <- c("age_cat", "educ", "marital", "econ", "hkborn", "income2", "hse_income2", "health", "HLCat3",
+             "DM", "LIVER", "HYPER", "LIPID", "IHD", "COAD", "STROKE", "CIRRHOSIS", "GERD", "COMOR_OTHER", "OWN_CA", "concordant_B1")
 tableone::CreateTableOne(data =  df, 
-                         # strata = c(""),
+                         strata = c("HLCat3"),
                          vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
 # regression results ----
 df$HLCat <- relevel(df$HLCat, ref = "Excellent")
+df$HLCat3 <- relevel(df$HLCat3, ref = "Sufficient/Excellent")
+df$educ <- relevel(df$educ, ref = "College/university or above")
+df$educ2 <- relevel(df$educ2, ref = "College/university or above")
 
-df$concordant_B1 <- ifelse(df$Modrisk_Breast %in% 1 & df$B_1 %in% 1:2, 1, 
-                                 ifelse(df$Modrisk_Breast %in% 0 & df$B_1 %in% 3:4, 1, 0))
 
 dep_vars <- c("B_1", "B_2", "B_3", "B_4A", "B_4B", "B_4C", "B_4D", "B_4E", "B_4F", "B_4G", "B_4H", "B_4I", "B_4J", "B_4K", "B_4L", 
-              "B_5A", "B_5B", "B_5C", "B_5D", "B_5E", "B_5F", "B_5G")
+              "B_5A", "B_5B", "B_5C", "B_5D", "B_5E", "B_5F", "B_5G", "concordant_B1")
 
+table <- combinetab_loop(df, dep_vars, formula = " ~ 1+HLCat3", reg_model = lm)
+table <- combinetab_loop(df, "concordant_B1", formula = " ~ 1+HLCat3", exponentiate = TRUE, reg_model = glm, family = binomial())
+table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+HLCat3")
+table <- combinetab_loop(df, "concordant_B1", formula = " ~ 1+age_cat+HLCat3", exponentiate = TRUE, reg_model = glm, family = binomial())
+table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+cd_nocancer+I(OWN_CA=='Yes')+HLCat3")
+table <- combinetab_loop(df, "concordant_B1", formula = " ~ 1+age_cat+cd_nocancer+I(OWN_CA=='Yes')+HLCat3", exponentiate = TRUE, reg_model = glm, family = binomial())
+table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+cd_nocancer+I(OWN_CA=='Yes')+HLCat3+
+                         WAIST+BMI+marital+econ+I(hkborn=='Yes')+income2")
+                         # +I(DM=='Yes')+I(LIVER=='Yes')+I(HYPER=='Yes')+I(LIPID=='Yes')+I(IHD=='Yes')+I(COAD=='Yes')+I(STROKE=='Yes')+I(CIRRHOSIS=='Yes')+I(GERD=='Yes')+I(COMOR_OTHER=='Yes')
+table <- combinetab_loop(df, "concordant_B1", formula = " ~ 1+age_cat+cd_nocancer+I(OWN_CA=='Yes')+HLCat3+
+                         WAIST+BMI+marital+econ+I(hkborn=='Yes')+income2", exponentiate = TRUE, reg_model = glm, family = binomial())
 
-table <- combinetab_loop(df, dep_vars, formula = " ~ 1+HLCat")
-table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+HLCat")
-table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+HLCat+concordant_B1")
-table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+cd+I(OWN_CA=='Yes')+HLCat+concordant_B1")
-table <- combinetab_loop(df, dep_vars, formula = " ~ 1+age_cat+cd+I(OWN_CA=='Yes')+HLCat+concordant_B1+
-                         WAIST+BMI+educ+marital+econ+I(hkborn=='Yes')+income+hse_income+health+
-                         I(DM=='Yes')+I(LIVER=='Yes')+I(HYPER=='Yes')+I(LIPID=='Yes')+I(IHD=='Yes')+I(COAD=='Yes')+I(STROKE=='Yes')+I(CIRRHOSIS=='Yes')+I(GERD=='Yes')+I(COMOR_OTHER=='Yes')")
 
 table %>% clipr::write_clip()
 
