@@ -10,11 +10,12 @@ library(eq5d)
 library(lubridate) # interval() & duration()
 library(ggplot2)
 
-Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
+# Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-06-01_0930.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-06-28_0955.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
+
 
 # # load Eva's data
 # XLConnect::xlcFreeMemory() # rtools is also required to be installed to avoid error
@@ -122,7 +123,7 @@ wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-05-21.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-06-04.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
@@ -221,7 +222,6 @@ wbs <- distinct(wbs, member_id, Round, .keep_all = TRUE) # keep only first insta
 wbs <- as.data.frame(wbs)
 wbs <- convert2NA(wbs, "")
 
-Sys.setlocale(locale =  "cht") 
 wbs$Hospital_day <- car::recode(wbs$Hospital_day, "
 c('一次', '半日', 'l', '1次') = 1;
 '1-2' = 1.5;
@@ -242,7 +242,7 @@ c('3-4次', '3-4') = 3.5;
 c(' 6', '64', '6次') = 6;
 '8～10' = 9
 ")
-Sys.setlocale(locale =  "eng") 
+
 wbs$Hospital_day <- as.numeric(wbs$Hospital_day)
 wbs$Hospital_day <- ifelse(wbs$Hospital_day %in% NA, 0, wbs$Hospital_day)
 wbs$Hospital <- ifelse(wbs$Hospital_day == 0, 0, wbs$Hospital)
@@ -284,7 +284,6 @@ df <- df[df$ehealth_eval_complete == 2,] # keep only completed records
 
 # clean up names of interviewers ----
 setwd(sprintf("~%s/ehealth", setpath))
-Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 source("rename_interviewer.R", encoding="utf-8")
 df$interviewer_name <- rename_interviewer(df$interviewer_name)
 
@@ -302,7 +301,6 @@ saveRDS(wbs, "wbs_data.rds")
 # install mediainfo & ffmpeg (ref: https://github.com/jmgirard/tidymedia/)
 
 # library(parallel)
-# Sys.setlocale(locale =  "eng")
 # setwd("C:/Users/tamkingwa/OneDrive - The Chinese University of Hong Kong")
 # audio <- as.data.frame(list.files(pattern = "", recursive = TRUE))
 # names(audio)[names(audio) == 'list.files(pattern = "", recursive = TRUE)'] <- "path"
