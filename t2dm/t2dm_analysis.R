@@ -265,7 +265,6 @@ df <- df %>%
 df$who_pa_mod <- ifelse(df$pa_mod >= 30, 1, 0)
 df$who_pa_trans <- ifelse(df$pa_trans >= 110, 1, 0)
 
-
 df$pa_work_prop <- ifelse(df$MET_week_con %in% 0, 0, df$MET_work/df$MET_week_con)
 df$pa_recr_prop <-  ifelse(df$MET_week_con %in% 0, 0, df$MET_recr/df$MET_week_con)
 df$pa_trans_prop <-  ifelse(df$MET_week_con %in% 0, 0, df$MET_trans/df$MET_week_con)
@@ -400,63 +399,15 @@ df$age_cat_ <- car::recode(df$age_cat_, " '0-34' = '15-34' ") # min age for PHS 
 df$married <- ifelse(df$marital %in% "Married", 1, 0)
 df$public_hse <- ifelse(df$hse_type %in% "Public rental housing", 1, 0)
 
+# grouping educ categories ----
+df$educ <- car::recode(df$educ, "
+'No schooling/Pre-primary' = 'Primary'
+")
+df$educ <- factor(df$educ, levels = c("Primary", "Secondary", "Post-secondary or above"))
+
 # # save data ----
 # save(df, file = "t2dm_data.RData")
 # haven::write_sav(df, "t2dm_data.sav")
-
-# causal diagram ----
-dagitty::dagitty('
-dag {
-bb="-3.484,-2.265,3.202,2.885"
-"BMI/WC/WHR" [pos="-0.571,0.542"]
-"self-rated health" [adjusted,pos="0.690,1.333"]
-"undiagnosed DM" [outcome,pos="1.705,-0.031"]
-HT [adjusted,pos="-1.076,-1.331"]
-age [adjusted,pos="-2.271,-0.690"]
-pa_recr_vig [adjusted,pos="0.284,-2.059"]
-pa_work_vig [adjusted,pos="-0.627,-2.059"]
-sex [adjusted,pos="-1.487,1.333"]
-smoking [adjusted,pos="-1.982,0.256"]
-who_pa [adjusted,pos="1.280,-1.709"]
-working_class [latent,pos="-1.794,-1.589"]
-"BMI/WC/WHR" -> "undiagnosed DM"
-"BMI/WC/WHR" <-> HT
-"self-rated health" -> "undiagnosed DM"
-HT -> "self-rated health"
-HT -> "undiagnosed DM"
-HT <-> smoking
-age -> "BMI/WC/WHR"
-age -> "undiagnosed DM"
-age -> HT
-age -> working_class
-pa_recr_vig -> "BMI/WC/WHR"
-pa_recr_vig -> "self-rated health"
-pa_recr_vig -> "undiagnosed DM"
-pa_recr_vig -> who_pa
-pa_work_vig -> "BMI/WC/WHR"
-pa_work_vig -> "self-rated health"
-pa_work_vig -> "undiagnosed DM"
-pa_work_vig -> who_pa
-sex -> "BMI/WC/WHR"
-sex -> "self-rated health"
-sex -> "undiagnosed DM"
-sex -> HT
-sex -> pa_recr_vig
-sex -> pa_work_vig
-sex -> smoking
-smoking -> "BMI/WC/WHR"
-smoking -> "undiagnosed DM"
-who_pa -> "BMI/WC/WHR"
-who_pa -> "self-rated health"
-who_pa -> "undiagnosed DM"
-who_pa -> HT
-working_class -> "self-rated health"
-working_class -> pa_recr_vig
-working_class -> pa_work_vig
-working_class -> smoking
-working_class -> who_pa
-}
-')  %>% plot
 
 # multinomial logistic ----
 library(nnet)
@@ -470,7 +421,7 @@ df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Normal")
 # df$case_prev_norm_ <- relevel(as.factor(df$case_prev_norm_), ref = "Prevalent")
 
 temp <- df
-temp <- temp[temp$male == 1, ]
+# temp <- temp[temp$male == 1, ]
 multinom_model <- multinom(case_inc_norm_ ~ age_cat_
                            # + I(age^2)
                            + male
@@ -483,7 +434,7 @@ multinom_model <- multinom(case_inc_norm_ ~ age_cat_
                            + hypertension
                            + I(smoking=="Currently smoke")
                            # + hse_type+educ+married+econ_active+I(income_num/1000)+checkup
-                           + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male+hse_income
+                           + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
                            # + MET_week_con
                            # + MET_work + MET_trans + MET_recr
                            # + pa_work_prop + pa_trans_prop + pa_recr_prop
@@ -590,6 +541,21 @@ glm(health ~ age
     , family = gaussian, data = df) %>%
   stargazer(type="text", style = "default",  apply.coef = exp, ci = TRUE, t.auto=FALSE, p.auto=FALSE, nobs = TRUE)
 
+# Hausman-McFadden test ----
+m1 <- mlogit::mlogit(case_inc_norm_ ~ 0 | age_cat_
+                     + male
+                     + health
+                     + who_pa
+                     + hypertension
+                     + I(smoking=="Currently smoke")
+                     + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
+                     + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                     + I(sed_time_perday/60)
+                     , shape =  "wide", data =  temp, reflevel="Normal")
+mlogit::hmftest(m1, update(m1, alt.subset=c("Normal", "Incident")))
+mlogit::hmftest(m1, update(m1, alt.subset=c("Normal", "Undiagnosed")))
+mlogit::hmftest(update(m1, reflevel="Incident"), update(m1, reflevel="Incident", alt.subset=c("Incident", "Undiagnosed")))
+
 # generate descriptive statistics ----
 df$current_smoker <- ifelse(df$smoking %in% "Currently smoke", 1, 0)
 
@@ -604,18 +570,91 @@ allVars <- c("age", "age_cat_", "sex",
              "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "sed_time_perday"
              )
 catVars <- c("age_cat_", "sex", "educ", "marital", "econ", "occup", "income_cat6", "district", "hse_income", "hse_type", "checkup_freq", "HT_prev", "hyperchol_prev",
-             "who_pa", "hypertension", "current_smoker", "checkup", "econ_active", "hse_income")
+             "who_pa", "hypertension", "current_smoker", "checkup", "econ_active")
 
 allVars <- c(allVars , 
              "MET_week_con", "MET_work", "MET_trans", "MET_recr",
              "pa_work_prop", "pa_trans_prop", "pa_recr_prop", "pa_vig", "pa_mod"
-             , "hse_income"
+             # , "hse_income"
 )
 
 temp <- df[complete.cases(df[, c(allVars)]),]
 # temp <- temp %>% filter(case_inc_norm_ %!in% "Undiagnosed")
-gen_desc(temp, vars = allVars, ordinalVars = catVars, medianVars = NULL, group = "case_inc_norm_") %>% clipr::write_clip()
+gen_desc(temp, vars = allVars, nominalVars = catVars, medianVars = NULL, group = "case_inc_norm_") %>% clipr::write_clip()
 
+# charts by income & housing ----
+setwd(sprintf("~%s/sarcopenia", setpath))
+import_func("sar_analysis.R")
+setwd(sprintf("~%s/t2dm", setpath))
+
+varlist <- t(array(c(c("case_inc_norm_", "case_inc_norm_"), 
+                     c("hse_type", "hse_type"), 
+                     c("income_num", "income_num")
+),
+dim = c(2,3))) %>% as.data.frame()
+
+library(ggplot2)
+get_plot(df[df$case_inc_norm_ %!in% NA, ], 
+         x = "case_inc_norm_", y = "hse_type", 
+         jitter_w = 0.25, jitter_h = 0.25)
+
+get_plot(df[df$case_inc_norm_ %!in% NA, ], 
+         x = "income_num", y = "HbA1c", 
+         jitter_w = 0.25, jitter_h = 0.25)
+
+# causal diagram ----
+dagitty::dagitty('
+dag {
+bb="-3.484,-2.265,3.202,2.885"
+"BMI/WC/WHR" [pos="-0.571,0.542"]
+"self-rated health" [adjusted,pos="0.690,1.333"]
+"undiagnosed DM" [outcome,pos="1.705,-0.031"]
+HT [adjusted,pos="-1.076,-1.331"]
+age [adjusted,pos="-2.271,-0.690"]
+pa_recr_vig [adjusted,pos="0.284,-2.059"]
+pa_work_vig [adjusted,pos="-0.627,-2.059"]
+sex [adjusted,pos="-1.487,1.333"]
+smoking [adjusted,pos="-1.982,0.256"]
+who_pa [adjusted,pos="1.280,-1.709"]
+working_class [latent,pos="-1.794,-1.589"]
+"BMI/WC/WHR" -> "undiagnosed DM"
+"BMI/WC/WHR" <-> HT
+"self-rated health" -> "undiagnosed DM"
+HT -> "self-rated health"
+HT -> "undiagnosed DM"
+HT <-> smoking
+age -> "BMI/WC/WHR"
+age -> "undiagnosed DM"
+age -> HT
+age -> working_class
+pa_recr_vig -> "BMI/WC/WHR"
+pa_recr_vig -> "self-rated health"
+pa_recr_vig -> "undiagnosed DM"
+pa_recr_vig -> who_pa
+pa_work_vig -> "BMI/WC/WHR"
+pa_work_vig -> "self-rated health"
+pa_work_vig -> "undiagnosed DM"
+pa_work_vig -> who_pa
+sex -> "BMI/WC/WHR"
+sex -> "self-rated health"
+sex -> "undiagnosed DM"
+sex -> HT
+sex -> pa_recr_vig
+sex -> pa_work_vig
+sex -> smoking
+smoking -> "BMI/WC/WHR"
+smoking -> "undiagnosed DM"
+who_pa -> "BMI/WC/WHR"
+who_pa -> "self-rated health"
+who_pa -> "undiagnosed DM"
+who_pa -> HT
+working_class -> "self-rated health"
+working_class -> pa_recr_vig
+working_class -> pa_work_vig
+working_class -> smoking
+working_class -> who_pa
+}
+')  %>% plot
 # is-lasso ----
 # dep_var <- "case_prev"
 
@@ -764,10 +803,10 @@ df$score_NCDRS_ <- ifelse(df$score_NCDRS >= 25, 1, 0)
 
 var <- "score_NCDRS"
 var2 <- ""
-gen_desc(df, vars = var, ordinalVars = var2, group = "case_healthy") 
-gen_desc(df, vars = var, ordinalVars = var2, group = "case_comorbid")
-gen_desc(df, vars = var, ordinalVars = var2, group = "case_prev") 
-gen_desc(df, vars = var, ordinalVars = var2, group = "case_inc")
+gen_desc(df, vars = var, nominalVars = var2, group = "case_healthy") 
+gen_desc(df, vars = var, nominalVars = var2, group = "case_comorbid")
+gen_desc(df, vars = var, nominalVars = var2, group = "case_prev") 
+gen_desc(df, vars = var, nominalVars = var2, group = "case_inc")
 
 # exploratory analysis ----
 table <- combine_tables(NULL, exponentiate = TRUE,
