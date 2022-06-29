@@ -585,7 +585,8 @@ print(cfa_cc12, digits = 2, cutoff = 0.10)
 
 
 
-# Alpha adjusted for NA values ----
+# Alpha adjusted for NA values ---- 
+# NA = not applicable but not missing
 # reference - https://www.researchgate.net/publication/328567140_Calculating_the_Cronbach's_alpha_coefficients_for_measurement_scales_with_not_applicable_option
 c_alpha = function(data, digits = 3) {
   # raw scale score
@@ -628,6 +629,7 @@ c_alpha = function(data, digits = 3) {
                          c("Alpha w/o item", "Item-scale cor.", "Item-rest cor.",
                            "n cor.", "Av. item-item cor", "n item")))
 }
+
 c_alpha1 = function(data, digits = 3) {
   # raw scale score
   raw_scale = rowSums(data, na.rm = T)
@@ -653,4 +655,3 @@ c_alpha1 = function(data, digits = 3) {
   cat(c("Cronbach's alpha (adjusted) = ", round(alpha1, digits), "\n"), sep = "")
   cat(c("Cronbach's alpha (raw) = ", round(alpha2, digits), "\n"), sep = "")
 }
-
