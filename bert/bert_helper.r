@@ -125,5 +125,9 @@ gen_rr <- function(TMRED, rr, linear_cutoff, return_x = FALSE){
 }
 
 p_adjust <- function(p, method = p.adjust.methods, n = length(p)){
-  p.adjust(p = p, method = method, n = n)
+  results <- data.frame(p = p)
+  results$nostring <- grepl('[0-9]+', results$p) # indicate non-numeric entries
+  results$adj_p[results$nostring == 1] <- p.adjust(p = results$p[results$nostring == 1], method = method, n = n)
+  results$adj_p[results$adj_p %in% NA] <- ""
+  return(results$adj_p)
 }
