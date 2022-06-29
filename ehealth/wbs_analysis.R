@@ -212,11 +212,9 @@ temp <- temp[temp$member_id %in% df$member_id,]
 # temp <- temp[temp$covid %in% 0, ]
 
 import_func("ehealth_analysis.R")
-Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
 gen_table(temp, id = "member_id", group = "Round", to_English = FALSE, vars = allVars, 
           # ordinalVars = ordinalVars, 
           nominalVars =  NULL, show_levels = FALSE, decimal = 3) %>% clipr::write_clip()
-Sys.setlocale(locale =  "eng") 
 
 # predictors of outcome change ----
 temp <- wbs
