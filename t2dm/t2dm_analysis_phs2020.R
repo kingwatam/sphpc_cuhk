@@ -10,28 +10,13 @@ library(dplyr)
 
 # import data & clean ----
 setwd(sprintf("~%s/t2dm", setpath))
-df <- foreign_to_labelled(haven::read_sav("Data_request_PHS2014_to_CUHK.sav"))
-temp <- xlsx::read.xlsx2("Copy of Data_request_PHS2014_to_CUHK_additional.xlsx", sheetName  = "Extract_cases"
-                         , header = TRUE
-)
-temp[,2:8] <- sapply(temp[,2:8], as.numeric)
-temp$Gender <- NULL
-temp$Age <- NULL
-temp$Dental.problem <- (temp$Dental.problem-2)*-1 # from 2 = No to 0 = No
-df <-  merge(df, temp, # extract item matched by case ID
-             by=c("DH_Reference_No"), all.x = TRUE)
 
-rm(temp)
-
-temp <- foreign_to_labelled(haven::read_sav("DH_PHS 2014-15_WC_HC_15.03.2022.sav"))
-df <-  merge(df, temp, # extract item matched by case ID
-             by=c("DH_Reference_No", "Q1", "Q2"), all.x = TRUE)
-rm(temp)
+df <- foreign_to_labelled(haven::read_sav("20220531_PHS2020_Merged_Derived_CUHK.sav"))
 
 names(df)[names(df) == "Q1"] <- "sex"
 names(df)[names(df) == "Q2"] <- "age"
 # names(df)[names(df) == "Age_he"] <- "age" # age at health exam
-names(df)[names(df) == "Q3"] <- "born_hk"
+# names(df)[names(df) == "Q3"] <- "born_hk"
 names(df)[names(df) == "Q5_g"] <- "educ"
 names(df)[names(df) == "Q4"] <- "marital"
 names(df)[names(df) == "Q6Q8_g"] <- "econ"
@@ -102,13 +87,6 @@ df$case_prev_ <- ifelse(df$case_prev %in% 1, "undiagnosed",
                         ifelse(df$case_prev %in% 0, "prevalent DM", NA))
 
 df$normoglycemic <-  ifelse(  (df$HbA1c < 6.5 & df$FPG < 7), 1, 0)
-
-# df$prev_inc_none <- ifelse(df$Q35a ==  1, "inc", 
-#                            ifelse(df$Q35 ==  1 | df$Q36c == 1, "prev", "none"))
-# 
-# df$case_inc_norm_2 <- ifelse(df$prev_inc_none %in% "inc", "inc",
-#                              ifelse(df$prev_inc_none %in% "none" & df$normoglycemic %in% 0, "Undiagnosed", 
-#                                     ifelse(df$normoglycemic %in% 1, "Normal", NA)))
 
 df$case_inc_norm_ <- ifelse( (df$HbA1c >= 6.5 | df$FPG >= 7) & (df$Q35a %!in% 1 & df$Q35 %!in% 1 & df$Q36c %!in% 1), "Undiagnosed", 
                               ifelse( df$Q35a ==  1, "Incident", 
@@ -445,7 +423,7 @@ multinom_model <- multinom(case_inc_norm_ ~ age_cat_
                            # + MET_week_con
                            # + MET_work + MET_trans + MET_recr
                            # + pa_work_prop + pa_trans_prop + pa_recr_prop
-                           # + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                           + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
                            + I(sed_time_perday/60)
                            # + pa_vig + pa_mod
                            , data = temp) 
@@ -471,7 +449,7 @@ glm_model <- glm(I(case_norm_=="Undiagnosed")~1+age_cat_
                  +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
-                 # +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
                  + I(sed_time_perday/60)
                  , family = binomial, data =  temp)
 
@@ -487,7 +465,7 @@ glm_model1 <- glm(I(case_norm_=="Undiagnosed")~1+age_cat_
                  +health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
-                 # +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
                  + I(sed_time_perday/60)
                  , family = binomial, data =  temp)
 
@@ -500,7 +478,7 @@ glm_model2 <- glm(case_inc~1+age_cat_
                  + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                  # + MET_work + MET_trans + MET_recr
                  # + pa_work_prop + pa_trans_prop + pa_recr_prop
-                 # +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                 +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
                  + I(sed_time_perday/60)
                  , family = binomial, data =  temp)
 
@@ -513,7 +491,7 @@ glm_model3 <- glm(case_prev~1+age_cat_
                   + health+who_pa+ hypertension+ I(smoking=="Currently smoke")
                   # + MET_work + MET_trans + MET_recr
                   # + pa_work_prop + pa_trans_prop + pa_recr_prop
-                  # +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
+                  +pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
                   + I(sed_time_perday/60)
                   , family = binomial, data =  temp)
 
@@ -548,21 +526,6 @@ glm(health ~ age
     , family = gaussian, data = df) %>%
   stargazer(type="text", style = "default",  apply.coef = exp, ci = TRUE, t.auto=FALSE, p.auto=FALSE, nobs = TRUE)
 
-# Hausman-McFadden test ----
-m1 <- mlogit::mlogit(case_inc_norm_ ~ 0 | age_cat_
-                     + male
-                     + health
-                     + who_pa
-                     + hypertension
-                     + I(smoking=="Currently smoke")
-                     + hse_type+educ+married*male+econ_active*male+I(income_num/1000)*male+checkup*male
-                     + pa_work_vig + pa_work_mod + pa_trans + pa_recr_vig + pa_recr_mod
-                     + I(sed_time_perday/60)
-                     , shape =  "wide", data =  temp, reflevel="Normal")
-mlogit::hmftest(m1, update(m1, alt.subset=c("Normal", "Incident")))
-mlogit::hmftest(m1, update(m1, alt.subset=c("Normal", "Undiagnosed")))
-mlogit::hmftest(update(m1, reflevel="Incident"), update(m1, reflevel="Incident", alt.subset=c("Incident", "Undiagnosed")))
-
 # generate descriptive statistics ----
 df$current_smoker <- ifelse(df$smoking %in% "Currently smoke", 1, 0)
 
@@ -577,17 +540,12 @@ allVars <- c("age", "age_cat_", "sex",
              "pa_work_vig", "pa_work_mod", "pa_trans", "pa_recr_vig", "pa_recr_mod", "sed_time_perday"
              )
 catVars <- c("age_cat_", "sex", "educ", "marital", "econ", "occup", "income_cat6", "district", "hse_income", "hse_type", "checkup_freq", "HT_prev", "hyperchol_prev",
-             "who_pa", "hypertension", "current_smoker", "checkup", "econ_active", "married" # bintary variables
-             # , "Q78_cate", "Q78a", "Q79_cate", "Q79a"
-             # , "Q86", "Q87", "Q88"
-             )
+             "who_pa", "hypertension", "current_smoker", "checkup", "econ_active")
 
 allVars <- c(allVars , 
              "MET_week_con", "MET_work", "MET_trans", "MET_recr",
              "pa_work_prop", "pa_trans_prop", "pa_recr_prop", "pa_vig", "pa_mod"
              # , "hse_income"
-             # , "Q78_cate", "Q78a", "Q79_cate", "Q79a", "avg_fru_veg"
-             # , "Q86", "Q87", "Q88", "Q125j"
 )
 
 temp <- df[complete.cases(df[, c(allVars)]),]

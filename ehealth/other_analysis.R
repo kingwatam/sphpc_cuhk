@@ -284,13 +284,16 @@ assess <- temp
 rm(temp)
 
 # EMS data ----
-ems <- readxl::read_xlsx("80_event_2022-04-07.xlsx", sheet  = "Sheet 1"
+ems <- readxl::read_xlsx("80_event_attendence_2022-08-23.xlsx", sheet  = "Sheet 1"
                          , col_names = TRUE, guess_max = 3000)
 names(ems)[names(ems)=="uid"] <- "member_id"
 # temp <- readxl::read_xlsx("All_event_2021-10-04.xlsx", sheet  = "Sheet 1"
 #                           , col_names = TRUE, guess_max = 3000)
 
-ems <- ems[as.Date(ems$attendance_in_time) <= as.Date('2022-03-31'),]
+ems20 <- readxl::read_xlsx("all data set from portal2022-09-05.xlsx", sheet  = "Event_Type_Link"
+                         , col_names = TRUE, guess_max = 3000)
+
+ems <- ems[as.Date(ems$attendance_in_time) <= as.Date('2022-07-31'),]
 
 ems$Total <-  ifelse(ems$attendance_in_time %!in% NA | ems$attendance_out_time %!in% NA , 1, 0)
 ems$Mental <- ifelse(ems$Mental %in% "Yes" & (ems$attendance_in_time %!in% NA | ems$attendance_out_time %!in% NA), 1, 0)

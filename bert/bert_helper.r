@@ -131,3 +131,31 @@ p_adjust <- function(p, method = p.adjust.methods, n = length(p)){
   results$adj_p[results$adj_p %in% NA] <- ""
   return(results$adj_p)
 }
+
+fit_lognorm <- function(p, q, mu = 3, sig = 0.2, index = 1, min_BMI = 0){ # index is used to show first or second output
+  require(nleqslv)
+  
+  if (min_BMI > 0){
+    p <- c(0, p)
+    q <- c(min_BMI, q)
+  }
+  
+  lognorm_cdf <- function(x, p, q){
+    ans <- c()
+    for (index in 1:length(x)){
+      meanlog <- x[1]
+      sdlog <- x[2]
+      ans_temp <- plnorm(q[index], meanlog = meanlog, sdlog = sdlog) - p[index]
+      ans <- c(ans, ans_temp)
+    }
+    return(ans)
+  }
+  
+  if (length(p) == 2){
+    ans <- nleqslv(c(meanlog = mu, sdlog = sig), lognorm_cdf, p = p, q = q)$x
+  } else {
+    model <- nls(p ~ plnorm(q, meanlog = abs(meanlog), sdlog = abs(sdlog)), start = list(meanlog = mu, sdlog = sig)) 
+    ans <- abs(coef(model))
+  }
+  return(ans[index])
+}

@@ -145,7 +145,7 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
                        c("diet_sum", "Diet score")), dim = c(2,34)))
 
 # restrict sample to age >= 60 ----
-cutoff_date <- as.Date('2022-05-31')
+cutoff_date <- as.Date('2022-07-31')
 df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age.r1 >= 60),]
@@ -155,7 +155,7 @@ dfwide <- dfwide[which(dfwide$age.r1 >= 60),]
 temp <- df
 temp$days_sincebl <-  cutoff_date - as.Date(temp$ehealth_eval_timestamp)
 
-leeway <- 60 # days
+leeway <- 0 # days
 temp[temp$time==1, ] %>% nrow()/sum((temp$days_sincebl[temp$time==0 ] >= (182+leeway)))
 temp[temp$time==2, ] %>% nrow()/sum((temp$days_sincebl[temp$time==0 ] >= (365+leeway)))
 
@@ -598,9 +598,9 @@ gen_table <- function(df, vars, ordinalVars = NULL, nominalVars = NULL, show_lev
   return(table)
 }
 
-Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
+# Sys.setlocale(locale =  "cht") # Chinese comma isn't recognised in to_English unless locale set to Chinese
 # temp <- df[df$time %in% c(0,1) & df$gender == "M" & df$age_group == "60-69", ]
-temp <- df[df$time %in% c(1,2), ]
+temp <- df[df$time %in% c(0,1), ]
 
 # temp <- df[df$member_id %in% df_matched$member_id_old[df_matched$int == 0],]
 # temp <- temp[temp$time %in% c(0,1), ]

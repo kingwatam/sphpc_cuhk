@@ -36,6 +36,8 @@
 ## combine_tables() combines the results of different regression models into a table, mainly a wrapper function for gen_reg()
 ## combinetab_loop() is a wrapper function for combine_tables for different dependent variables with a fixed set of explanatory variables
 ## gen_desc() generates descriptive statistics (table 1)
+## c_alpha() computes Cronbach's alpha for internal consistency
+## c_alpha1() computes 3 different versions 
 ## save_() works the same as save() with user-defined names for objects
 ## timeout_skip() skips when running time exceeds a set amount
 ## summary.lm() lm summary for robust (sandwich) SEs and clustered SEs (up to 2 cluster variables)
@@ -738,12 +740,13 @@ combine_tables <- function(table = NULL, ..., dep_var = NULL, adjusted_r2 = FALS
   return(table)
 }
 
-combinetab_loop <- function(data, outcomes, formula, exponentiate = FALSE, decimal_places = 3, reg_model = lm, ...){
+combinetab_loop <- function(data, outcomes, formula, exponentiate = FALSE, show_CI = FALSE, decimal_places = 3, reg_model = lm, ...){
   table <- data.frame()
   for (outcome in outcomes){
     table_temp <- combine_tables(NULL, 
                                  exponentiate = exponentiate,
                                  decimal_places = decimal_places,
+                                 show_CI = show_CI,
                                  dep_var = paste0(outcome),
                                  reg_model(paste0(outcome, formula), data = data, ...)
     )
@@ -754,7 +757,7 @@ combinetab_loop <- function(data, outcomes, formula, exponentiate = FALSE, decim
   return(table)
 }
 
-gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = "time", show_NA = FALSE, both_tests = FALSE){ 
+gen_desc <- function(data, vars, nominalVars = NULL, medianVars = NULL, group = "time", show_NA = FALSE, both_tests = FALSE){ 
   categories <- unique(data[[group]]) 
   if (!show_NA){
     categories <- categories[categories %!in% NA]
@@ -813,7 +816,7 @@ gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = 
       # if (class(data[[var]]) == "character") next()
       # if (all(data[[var]][which(data[[group]] %in% category)] %in% NA)) next()
       
-      if (var %in% ordinalVars){
+      if (var %in% nominalVars){
         
         table[row_count, 1] <- var
         
@@ -845,7 +848,7 @@ gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = 
         row_count <- row_count_ # reset count
       } 
       
-      if (var %!in% ordinalVars){
+      if (var %!in% nominalVars){
         
         table[row_count, 1] <- var
         
@@ -857,7 +860,7 @@ gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = 
           table[row_count, col_pval] <- p_value %>% round(digits = 3)
         }
         
-        table[row_count, col_label] <- "mean (sd)"
+        table[row_count, col_label] <- "Mean (SD)"
         table[row_count, get_("col_", i)] <-  get_mean_sd(data[[var]][which(data[[group]] %in% category)])
         
       }
@@ -869,6 +872,79 @@ gen_desc <- function(data, vars, ordinalVars = NULL, medianVars = NULL, group = 
   }
   return(table)
 }
+
+# Alpha adjusted for NA values ---- 
+# NA = not applicable but not missing
+# reference - https://www.researchgate.net/publication/328567140_Calculating_the_Cronbach's_alpha_coefficients_for_measurement_scales_with_not_applicable_option
+c_alpha <- function(data, var, digits = 3) {
+  # raw scale score
+  raw_scale = rowSums(data, na.rm = T)
+  # k = number of items in a scale
+  k = dim(data)[2]
+  # adjusted scale score, scaled-up to the number of items in a scale
+  adjusted_scale = k * (raw_scale / rowSums(!is.na(data)))
+  # variances
+  item_variance = mapply(var, data, na.rm = T)
+  scale_variance = var(adjusted_scale, na.rm = T)
+  6
+  # alpha
+  alpha = k / (k - 1) * (1 - sum(item_variance, na.rm = T)/scale_variance)
+  # additional output:
+  # alpha if item removed; item-scale, item-rest, and average inter-item
+  # correlations
+  alpha_r = itc = irc = aic = aic_n = rep(0, k)
+  itc = cor(data, adjusted_scale, use = "pairwise.complete.obs")
+  n_cor = mapply(function(x) length(na.omit(x)), data)
+  for(i in 1:k) {
+    raw_scale_r = rowSums(data[-i], na.rm = T)
+    adjust_r = k_r = dim(data[-i])[2]
+    adjusted_scale_r = adjust_r * (raw_scale_r / rowSums(!is.na(data[-i])))
+    item_variance_r = mapply(var, data[-i], na.rm = T)
+    scale_variance_r = var(adjusted_scale_r, na.rm = T)
+    alpha_r[i] = k_r / (k_r - 1) *
+      (1 - sum(item_variance_r, na.rm = T)/scale_variance_r)
+    irc[i] = cor(data[i], adjusted_scale_r, use = "pairwise.complete.obs")
+    aic[i] = mean(cor(data[i], data[-i],
+                      use = "pairwise.complete.obs"), na.rm = T)
+    aic_n[i] = rowSums(!is.na(cor(data[i], data[-i],
+                                  use = "pairwise.complete.obs")))
+  }
+  # output
+  cat(c("Cronbach's alpha = ", round(alpha, digits), "\n\n"), sep = "")
+  matrix(round(c(alpha_r, itc, irc, n_cor, aic, aic_n), digits),
+         nrow = length(alpha_r), ncol = 6,
+         dimnames = list(names(data),
+                         c("Alpha w/o item", "Item-scale cor.", "Item-rest cor.",
+                           "n cor.", "Av. item-item cor", "n item")))
+}
+
+c_alpha1 <- function(data, var, digits = 3) {
+  require(psych)
+  # raw scale score
+  raw_scale = rowSums(data, na.rm = T)
+  # k = number of items in a scale
+  k = dim(data)[2]
+  # adjusted scale score, scaled-up to the number of items in a scale
+  adjusted_scale = k * (raw_scale / rowSums(!is.na(data)))
+  # variances
+  # -- variance-covariance matrix, C
+  C = cov(data, use = "pairwise")
+  # -- item variances
+  item_variance = mapply(var, data, na.rm = T)
+  # sum of item variances
+  # -- sum(item_variance) == tr(C)
+  # variance of scale
+  # -- var(raw_scale, na.rm = T) =/= var(adjusted_scale, na.rm = T) =/= sum(C)
+  # alpha
+  alpha = k / (k - 1) * (1 - tr(C)/sum(C))
+  alpha1 = k / (k - 1) * (1 - sum(item_variance)/var(adjusted_scale, na.rm = T))
+  alpha2 = k / (k - 1) * (1 - sum(item_variance)/var(raw_scale, na.rm = T))
+  # output
+  cat(c("Cronbach's alpha (psych) = ", round(alpha, digits), "\n"), sep = "")
+  cat(c("Cronbach's alpha (adjusted) = ", round(alpha1, digits), "\n"), sep = "")
+  cat(c("Cronbach's alpha (raw) = ", round(alpha2, digits), "\n"), sep = "")
+}
+
 
 save_ <- function(..., file) { # https://stackoverflow.com/questions/21248065/r-rename-r-object-while-save-ing-it
   x <- list(...)

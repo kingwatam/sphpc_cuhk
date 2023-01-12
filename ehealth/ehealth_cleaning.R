@@ -12,7 +12,7 @@ library(ggplot2)
 
 # Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-06-28_0955.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-08-22_1450.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -116,14 +116,14 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs0 <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2022-02-28.xlsx", sheet  = "Raw data"
+wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2022-08-15.xlsx", sheet  = "Raw data"
 ) # latest WBS all data
 
 wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-06-04.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-08-13.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)
@@ -223,10 +223,10 @@ wbs <- as.data.frame(wbs)
 wbs <- convert2NA(wbs, "")
 
 wbs$Hospital_day <- car::recode(wbs$Hospital_day, "
-c('一次', '半日', 'l', '1次') = 1;
+c('一次', '半日', 'l', '1次', '卵巢手術', '１') = 1;
 '1-2' = 1.5;
 '2次' = 2;
-'三次' = 3;
+c('三次', '３') = 3;
 '6日' = 6
 ")
 wbs$Aeservices_day  <- car::recode(wbs$Aeservices_day, "
@@ -234,13 +234,14 @@ c('一', '一次', '一次。', '〉1', '至少一次', '跌傷', '1次 耳水�
 '1-2' = 1.5;
 c('2次', '多次') = 2;
 '2-3' = 2.5;
-c('3次') = 3;
+c('3次', '３') = 3;
 c('3-4次', '3-4') = 3.5;
-'4次' = 4;
+c('4次', '４') = 4;
 '超過4次' = 5;
 '5-6' = 5.5;
 c(' 6', '64', '6次') = 6;
-'8～10' = 9
+'8～10' = 9;
+c('Forgot', '忘了') = NA
 ")
 
 wbs$Hospital_day <- as.numeric(wbs$Hospital_day)
@@ -304,7 +305,7 @@ saveRDS(wbs, "wbs_data.rds")
 # setwd("C:/Users/tamkingwa/OneDrive - The Chinese University of Hong Kong")
 # audio <- as.data.frame(list.files(pattern = "", recursive = TRUE))
 # names(audio)[names(audio) == 'list.files(pattern = "", recursive = TRUE)'] <- "path"
-# 
+#
 # audio$path <- gsub("AKAé¦™æ¸¯ä»”åŠæœƒ", "AKA香港仔坊會", audio$path)
 # audio$path <- gsub("CARæ˜Žæ„›", "CAR明愛", audio$path)
 # audio$path <- gsub("CRCç¦®è³¢æœƒ", "CRC禮賢會", audio$path)
@@ -323,7 +324,7 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$path <- gsub("YCHä»æ¿Ÿ", "YCH仁濟", audio$path)
 # audio$path <- gsub("YWCåŸºç£æ•™å¥³é’å¹´æœƒ", "YWC基督教女青年會", audio$path)
 # audio$path <- gsub("HUBè³½é¦¬æœƒæµé‡‘åŒ¯", "HUB賽馬會流金匯", audio$path)
-# 
+#
 # audio$path <- gsub("éœ€å†æ‰“", "需再打", audio$path)
 # audio$path <- gsub("å””å¾—é–’", "唔得閒", audio$path)
 # audio$path <- gsub("æœªèƒ½å®Œæˆå£é.­åŒæ„éŒ„éŸ³", "未能完成口頭同意錄音", audio$path)
@@ -332,7 +333,7 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$path <- gsub("å†ç´„æ™‚é–“", "再約時間", audio$path)
 # audio$path <- gsub("å¥³å…’ä»£ç­”", "女兒代答", audio$path)
 # audio$path <- gsub("â€“", "–", audio$path)
-# 
+#
 # audio <- audio %>% filter(!grepl(".ini", audio[,1], ignore.case = TRUE)) # exclude non audio files (not mp3|wav|mov|m4a|etc)
 # audio$filename <- basename(audio$path)
 # audio$member_id <- gsub("Baseline-|baseline-|6months-|6month-|6motnh-|6month_|12month-|12month_|1year-", "", audio$filename)
@@ -344,18 +345,18 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$member_id <- substr(audio$member_id, 1, 9) # keep only first 9 charac
 # audio$filename_no_id <- stringr::str_remove_all(audio$filename, audio$member_id) # remove member ID from filename
 # audio$filename_no_id <- substr(audio$filename_no_id, 1, nchar(audio$filename_no_id)-nchar(".mp3"))
-# 
+#
 # cl <- makeCluster(24) # using 24 instances/clusters yield over 10x speedup (12 threads)
 # audio$duration <- parSapply(cl, audio$path, tidymedia::get_duration, unit = "min")
 # stopCluster(cl)
 # rm(cl)
-# 
+#
 # cl <- makeCluster(24) # using 24 instances/clusters yield over 10x speedup (12 threads)
 # audio$file_date <- parSapply(cl, audio$path, function(x) as.character(file.info(x)$mtime))
 # audio$file_date <- as.Date(audio$file_date)
 # stopCluster(cl)
 # rm(cl)
-# 
+#
 # # alternative dates from file name
 # audio$file_date2 <- gsub('.*[_|-]([0-9]+).*','\\1', audio$filename_no_id) # \\1 returns first match
 # audio$file_date2 <- ifelse(nchar(audio$file_date2) == 8 & is.finite(suppressWarnings(as.numeric(audio$file_date2))), audio$file_date2,
@@ -364,7 +365,7 @@ saveRDS(wbs, "wbs_data.rds")
 # audio$file_date2 <- if_else(nchar(audio$file_date2) == 8,  as.Date(audio$file_date2, format = "%Y%m%d"),
 #                             ifelse(nchar(audio$file_date2) == 6,   as.Date(audio$file_date2, format = "20%y%m%d"), NA))
 # audio$file_date <- if_else(audio$file_date < as.Date("2020-01-01"), audio$file_date2, audio$file_date) # fix dates wrong dates showing year 2017
-# 
+#
 # setwd(sprintf("~%s/ehealth", setpath))
 # saveRDS(audio, "audio_duration.rds")
 

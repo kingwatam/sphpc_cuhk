@@ -21,7 +21,7 @@ lo <- 1:15  # lower tertile (~28% telephone, ~26% WBS)
 mi <- 16:19 # middle tertile (~39% telephone, ~39%, WBS)
 hi <- 20:35 # upper tertile (~33% telephone, ~35% WBS)
 
-cutoff_date <- as.Date('2022-05-31')
+cutoff_date <- as.Date('2022-07-31')
 df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 wbs <- wbs[as.Date(wbs$wbs_survey_date) <= cutoff_date,]
 
@@ -344,10 +344,12 @@ var_names <- t(array(c(c("use_health_service_8", "Out-of-pocket payments (lower=
 # df <- df[(df$ehealth_eval_timestamp) <= ('2021-06-28 10:00:00 HKT'),]
 df <- df[which(df$age.r1 >= 60),]
 dfwide <- dfwide[which(dfwide$age.r1 >= 60),]
+wbs <- wbs[which(wbs$Age >= 60),]
+wbswide <- wbswide[which(wbswide$Age.r1 >= 60),]
 
 # withdrawal statistics ----
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-withdrawals <- xlsx::read.xlsx2("WithdrawalList_2022-06-04.xlsx", sheetName  = "Sheet 1")
+withdrawals <- xlsx::read.xlsx2("WithdrawalList_2022-08-13.xlsx", sheetName  = "Sheet 1")
 
 names(withdrawals)[names(withdrawals)=="X3..會員編號"] <- "member_id"
 names(withdrawals)[names(withdrawals)=="X4..退出原因"] <- "withdrawal_reason"
@@ -431,7 +433,7 @@ df$covid_4th <- ifelse(df$ehealth_eval_timestamp >= as.Date('2020-11-01') &
                          df$ehealth_eval_timestamp <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
 
 df$covid_5th <- ifelse(df$ehealth_eval_timestamp >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
-                       & df$ehealth_eval_timestamp <= as.Date('2022-04-21') # gov social distancing measures easing from 21st April 2022
+                       # & df$ehealth_eval_timestamp <= as.Date('2022-04-20') # gov social distancing measures easing from 21st April 2022
                        , 1, 0)
 
 df$covid <- ifelse(df$covid_3rd %in% 1 | df$covid_4th %in% 1 | df$covid_5th %in% 1, 1, 0)
@@ -444,11 +446,79 @@ wbs$covid_4th <- ifelse(wbs$wbs_survey_date >= as.Date('2020-11-01') &
                           wbs$wbs_survey_date <= as.Date('2021-03-31'), 1, 0) # https://www.sciencedirect.com/science/article/pii/S2666606521001905
 
 wbs$covid_5th <- ifelse(wbs$wbs_survey_date >= as.Date('2021-12-31') # https://www.tandfonline.com/doi/full/10.1080/22221751.2022.2060137
-                        # & wbs$wbs_survey_date <= as.Date('2022-06-31')
+                        # & wbs$wbs_survey_date <= as.Date('2022-04-20')
                         , 1, 0)
 
 wbs$covid <- ifelse(wbs$covid_3rd %in% 1 | wbs$covid_4th %in% 1 | wbs$covid_5th %in% 1, 1, 0)
 
+
+# descriptive statistics ----
+allVars <- c("gender.r1", "age.r1", "age_group.r1", "educ.r1", "marital.r1", "living_status.r1", "housing_type.r1"
+             # , "risk_score.bl"
+             )
+catVars <- c("gender.r1", "age_group.r1", "educ.r1", "marital.r1", "living_status.r1", "housing_type.r1")
+
+# gen_desc(df, vars = allVars, nominalVars = catVars, medianVars = NULL
+#          # , group = "HLCat3"
+# ) %>% clipr::write_clip()
+
+# telephone survey
+df_temp <- df %>% filter(time %in% c(0,1)) %>% add_count(member_id) %>% filter(n == 2 & time == 0) # only T0 of those with both T0 & T1
+
+tableone::CreateTableOne(data = df_temp[df_temp$time %in% c(0,1),], 
+                         # strata = c("time"),
+                         vars = allVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+# WBS survey
+wbs_temp <- wbs
+wbs_temp <- wbs_temp[wbs_temp$member_id %in% wbs_temp$member_id[wbs_temp$Round == 1 & wbs_temp$risk_level == 3], ]
+wbs_temp <- wbs_temp[wbs_temp$member_id %in% df$member_id, ]
+# wbs_temp <- wbs_temp[(wbs_temp$member_id %in% df$member_id & wbs_temp$Round == 2) | wbs_temp$Round == 1, ]
+
+wbs_temp <- merge(wbs_temp, dfwide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
+              by=c("member_id"), all.x = TRUE)
+wbs_temp <- wbs_temp %>% filter(Round %in% c(1,2)) %>% add_count(member_id) %>% filter(n == 2 & Round == 1) 
+
+wbs_temp$age_group <- recode_age(wbs_temp$Age, age_labels = c("50-59", "60-69", "70-79", "80+"))
+
+allVars <- c("gender", "Age", "age_group", "educ", "marital", "living_status", "housing_type"
+             # , "risk_score.bl"
+)
+catVars <- c("gender", "age_group", "educ", "marital", "living_status", "housing_type")
+
+
+tableone::CreateTableOne(data = wbs_temp, 
+                         strata = c("Round"),
+                         vars = allVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
+
+
+df_temp$survey <- "telephone"
+wbs_temp$survey <- "wbs"
+allVars_df <- c("gender.r1", "age.r1", "age_group.r1", "educ.r1", "marital.r1", "living_status.r1", "housing_type.r1"
+                # , "risk_score.bl"
+)
+allVars_wbs <- c("gender", "Age", "age_group", "educ", "marital", "living_status", "housing_type"
+             # , "risk_score.bl"
+)
+
+for (index in 1:length(allVars_df)){
+  names(df_temp)[names(df_temp) %in% allVars_df[index]] <- allVars_wbs[index]
+}
+
+temp <- rbind(df_temp[,c(allVars_wbs, "survey", "member_id")], wbs_temp[,c(allVars_wbs, "survey", "member_id")])
+df_temp[df_temp$member_id %in% wbs_temp$member_id,] %>% nrow
+wbs_temp[wbs_temp$member_id %in% df_temp$member_id,] %>% nrow
+
+## restrict to people in both telephone survey and WBS
+# temp <- temp[temp$member_id %in% wbs_temp$member_id,]
+# temp <- temp[temp$member_id %in% df_temp$member_id,]
+
+tableone::CreateTableOne(data = temp, 
+                         strata = c("survey"),
+                         vars = allVars, factorVars = catVars) %>% 
+  print(showAllLevels = TRUE) %>% clipr::write_clip()
 
 # telephone survey pre-post results ----
 to_character_df <- function(df, vars){
@@ -698,19 +768,20 @@ allVars <- c("amic", "amic_sum",
              "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
              "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5", "diet_sum", "use_health_service_8")
 
-ordinalVars <- c("amic",
-                 "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
+ordinalVars <- c("self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
                  "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression",
-                 "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_12_1",
+                 "pase_c_1", "pase_c_1_2",
                  "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
                  "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5")
+
+nominalVars <- c("amic", "pase_c_11", "pase_c_12_1")
 
 medianVars <- c("use_health_service_8")
 
 # temp <- df[df$time %in% c(0,1) & df$gender == "M" & df$age_group == "60-69", ]
-temp <- df[df$time %in% c(0,1)
+temp <- df[df$time %in% c(1,2)
              # & df$covid %in% 0 # outside covid waves
-           & df$risk_score.bl %in% lo
+           # & df$risk_score.bl %in% lo
              , ] 
 
 # # remove withdrawals or sessions < 6 
@@ -721,7 +792,7 @@ temp <- df[df$time %in% c(0,1)
 # temp <- temp[(temp$f2f_telemode_num >= 6 & temp$time >= 1) | temp$time == 0,] # remove if nursing sessions < 6
 
 # temp <- temp[temp$interviewer_name %in% c("Ashley Leung", "Eva Mak", "Susan To", "Tang Tsz Chung", "Lucas Li", "Vicky", "Chan Ka Wai, Katherine", "Carman Yeung", "Yan"), ] # restrict to interviewers with longer interview duration
-gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  NULL, medianVars = medianVars, p_decimal = 100) %>% clipr::write_clip()
+gen_table(temp, to_English = TRUE, vars = allVars[], ordinalVars =  ordinalVars, nominalVars = nominalVars, medianVars = medianVars, show_levels = FALSE, p_decimal = 100) %>% clipr::write_clip()
 
 # wbs variable lists and variable creation ----
 vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
@@ -761,9 +832,7 @@ wbs$married <- ifelse(wbs$marital %in% 2, 1, 0) # (1= single, 2=married, 3=widow
 ordinalVars <- c("educ", "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5",
                  "Self_rated_health", "Satisfaction", 
                  "Meaning_of_life", "Happiness", 
-                 "Incontinence", "Drug_use", 
-                 "risk_score")
-
+                 "Incontinence", "Drug_use")
 
 allVars <- c(allVars, 
              "prefrail", "sarcopenic", 
@@ -828,16 +897,19 @@ temp <- wbs
 
 # high risk at 1st round WBS & did baseline
 temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
-temp <- temp[temp$member_id %in%
-               df$member_id
-               # dfwide$member_id[(as.Date(dfwide$ehealth_eval_timestamp.t0)+84) < dfwide$wbs_survey_date.r2]
-             ,]
+# temp <- temp[temp$member_id %in%
+#                df$member_id
+#                # dfwide$member_id[(as.Date(dfwide$ehealth_eval_timestamp.t0)+84) < dfwide$wbs_survey_date.r2]
+#              ,]
 temp <- merge(temp, dfwide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
               by=c("member_id"), all.x = TRUE)
-temp <- temp[temp$risk_score.r1 %in% 14,]
+# temp <- temp[temp$risk_score.r1 %in% lo,]
 # temp <- temp[temp$covid %in% 0, ]
 
 # # low risk at 1st round WBS & not done telephone survey
+# temp <- wbs
+# temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-07-31'),]
+# 
 # temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level %in% c(1, 2)], ]
 # temp <- temp[temp$member_id %!in%
 #                df$member_id
@@ -845,12 +917,12 @@ temp <- temp[temp$risk_score.r1 %in% 14,]
 #                ,]
 # temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
 #               by=c("member_id"), all.x = TRUE)
-# temp <- temp[temp$risk_score.r1 %in% 13,]
-# temp <- temp[temp$covid %in% 0, ]
+# # temp <- temp[temp$risk_score.r1 %in% 13,]
+# # temp <- temp[temp$covid %in% 0, ]
 
 gen_table(temp, id = "member_id", group = "Round", to_English = FALSE, vars = allVars, 
-          # ordinalVars = ordinalVars, 
-          nominalVars =  NULL, show_levels = FALSE, p_decimal = 100) %>% clipr::write_clip()
+          ordinalVars = ordinalVars,
+          nominalVars =  nominalVars, show_levels = FALSE, p_decimal = 100) %>% clipr::write_clip()
 
 
 # synthetic control ----
@@ -883,3 +955,62 @@ get_plot(df[df$member_id %in% df$member_id[df$time %in% 1] & df$time %in% 0:1,],
          y = "pase_c", group = "time", legendtitle = "Time point", legend = TRUE, showCI = FALSE, scatter = FALSE) + ggtitle('') &
   theme(axis.text.x = element_text(size=rel(6*1), angle=20, vjust = 1, hjust = 1),
         axis.text.y = element_text(size=rel(6*1))) 
+
+# ICC calculation
+dfwide$cluster <- substr(dfwide$member_id, 0, 5) # 80 centres
+
+cluster_icc <- function(data, var, cluster){
+  summary_aov <- summary(aov(data[[var]] ~ data[[cluster]]))
+  print(var)
+  return(summary_aov[[1]][1,2]/sum(summary_aov[[1]][,2]))
+}
+cluster_icc(dfwide, "Meaning_of_life.r1", "cluster")
+cluster_icc(dfwide, "Happiness.r1", "cluster")
+cluster_icc(dfwide, "Satisfaction.r1", "cluster")
+cluster_icc(dfwide, "SAR_total.r1", "cluster")
+cluster_icc(dfwide, "FS_total.r1", "cluster")
+cluster_icc(dfwide, "FS_total.r1", "cluster")
+
+vars1 <- c("amic", "amic_sum", 
+             "amic1", "amic2", "amic3", "amic4", "amic5",
+             "self_efficacy", "self_efficacy_1", "self_efficacy_2", "self_efficacy_3", "self_efficacy_4", "self_efficacy_5",
+             "eq5d", "eq5d_mobility", "eq5d_self_care", "eq5d_usual_activity", "eq5d_pain_discomfort", "eq5d_anxiety_depression", "eq5d_health", 
+             "satisfaction_1", "satisfaction_2", 
+             "pase_c", "pase_c_1", "pase_c_1_2", "pase_c_11", "pase_c_11_1", "pase_c_12_1", "pase_c_12",
+             "matrix_diet_dh3", "matrix_diet_dh4", "matrix_diet_dh7", "matrix_diet_dh8",
+             "diet_dp1", "diet_dp3", "diet_dp4", "diet_dp5", "diet_sum", "use_health_service_8")
+vars2 <- c("Hypertension", "Hypertension_HA",
+             "Diabetes", "Diabetes_HA", "Cholesterol", "Heart", # "Heart_score", 
+             "Stroke", "Copd", "Renal", "Disease_other", # "married", 
+             "educ", "Income_oaa", "Income_oala", 
+             "Income_ssa", "Income_work", "Income_saving", "Income_cssa", # "Income_cssa_score", 
+             "Income_pension", "Income_child", "Income_other", # "living_status", "housing_type", 
+             "Rent", "Own", "FS1", "FS2", "FS3", "FS4", "FS5", "FS_total", # "FS_score", 
+             "SAR1", "SAR2",  "SAR3", "SAR4", "SAR5", "SAR_total", "AMIC", # "AMIC_score", 
+             "Self_rated_health", # "Self_rated_health_score", 
+             "Satisfaction", # "Satisfaction_score",
+             "Meaning_of_life", "Happiness", # "Happiness_score", 
+             "Incontinence", "Hospital", "Hospital_day", # "Hospital_score", 
+             "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
+             "Drug_use", # "Drug_use_score", 
+             "risk_score")
+
+
+for (var in vars1){
+  print(cluster_icc(dfwide
+                    [dfwide$cluster %in% sample(unique(dfwide$cluster), 30), ] 
+                    %>% group_by(cluster) %>% slice_sample(n=9)
+                    , paste0(var, ".t0"), "cluster"))
+}
+for (var in vars1){
+  print(cluster_icc(dfwide, paste0(var, ".t1"), "cluster"))
+}
+
+for (var in vars2){
+  print(cluster_icc(dfwide, paste0(var, ".r1"), "cluster"))
+}
+for (var in vars2){
+  print(cluster_icc(dfwide, paste0(var, ".r2"), "cluster"))
+}
+
+
