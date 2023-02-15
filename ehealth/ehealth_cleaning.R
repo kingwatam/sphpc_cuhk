@@ -12,7 +12,7 @@ library(ggplot2)
 
 # Sys.setlocale(locale =  "cht") # set locale to traditional Chinese
 setwd(sprintf("~%s/ehealth", setpath))
-df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2022-08-22_1450.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
+df <- foreign_to_labelled(haven::read_sav("EHealthIIEvaluation_DATA_NOHDRS_2023-02-08_1136.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 # temporary fix
 
@@ -116,14 +116,14 @@ setwd(sprintf("~%s/ehealth/JCreport 20210409/data/Overall", setpath))
 wbs0 <- foreign_to_labelled(haven::read_sav("EHealth_NEW_DATA_WBS_Complete_2021-01-31_Overall.sav", encoding = "UTF-8")) # Sys.setlocale(category = "LC_ALL", locale = "cht")
 
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2022-08-15.xlsx", sheet  = "Raw data"
+wbs <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_IOA_2022-10-15.xlsx", sheet  = "Raw data"
 ) # latest WBS all data
 
 wbs$Survey_date <- as.Date(wbs$Survey_date)
 wbs$All_forms_completed_date <- as.Date(wbs$All_forms_completed_date)
 wbs$Birth_date <- as.Date(wbs$Birth_date)
 
-wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-08-13.xlsx", sheet  = "Raw data"
+wbs2 <- readxl::read_excel("EHealth_NEW_DATA_WBS_Complete_SCHSA_2022-11-26.xlsx", sheet  = "Raw data"
                          ) # latest WBS high-risk data
 wbs2$Survey_date <- as.Date(wbs2$Survey_date)
 wbs2$All_forms_completed_date <- as.Date(wbs2$All_forms_completed_date)

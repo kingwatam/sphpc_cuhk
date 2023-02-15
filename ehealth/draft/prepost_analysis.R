@@ -17,11 +17,22 @@ setwd(sprintf("~%s/ehealth", setpath))
 df <- readRDS("ehealth_data.rds")
 wbs <- readRDS("wbs_data.rds")
 
+# import BP data
+setwd(sprintf("~%s/BDDA", setpath))
+bp <- read.csv("km7873.csv")
+setwd(sprintf("~%s/ehealth", setpath))
+
+names(bp)[names(bp) == "MaskID"] <- "member_id"
+df <- merge(df, bp[, c("member_id", "Mean_SBP_before",	"Mean_SBP_after",	"SBP_diff")],
+            by=c("member_id"), all.x = TRUE)
+wbs <- merge(wbs, bp[, c("member_id", "Mean_SBP_before",	"Mean_SBP_after",	"SBP_diff")],
+            by=c("member_id"), all.x = TRUE)
+
 lo <- 1:15  # lower tertile (~28% telephone, ~26% WBS)
 mi <- 16:19 # middle tertile (~39% telephone, ~39%, WBS)
 hi <- 20:35 # upper tertile (~33% telephone, ~35% WBS)
 
-cutoff_date <- as.Date('2022-07-31')
+cutoff_date <- as.Date('2022-12-31')
 df <- df[as.Date(df$ehealth_eval_timestamp) <= cutoff_date,]
 wbs <- wbs[as.Date(wbs$wbs_survey_date) <= cutoff_date,]
 
@@ -349,7 +360,7 @@ wbswide <- wbswide[which(wbswide$Age.r1 >= 60),]
 
 # withdrawal statistics ----
 setwd(sprintf("~%s/ehealth/wbs", setpath))
-withdrawals <- xlsx::read.xlsx2("WithdrawalList_2022-08-13.xlsx", sheetName  = "Sheet 1")
+withdrawals <- xlsx::read.xlsx2("WithdrawalList_2022-11-26.xlsx", sheetName  = "Sheet 1")
 
 names(withdrawals)[names(withdrawals)=="X3..會員編號"] <- "member_id"
 names(withdrawals)[names(withdrawals)=="X4..退出原因"] <- "withdrawal_reason"
@@ -489,7 +500,7 @@ catVars <- c("gender", "age_group", "educ", "marital", "living_status", "housing
 
 
 tableone::CreateTableOne(data = wbs_temp, 
-                         strata = c("Round"),
+                         # strata = c("Round"),
                          vars = allVars, factorVars = catVars) %>% 
   print(showAllLevels = TRUE) %>% clipr::write_clip()
 
@@ -779,7 +790,7 @@ nominalVars <- c("amic", "pase_c_11", "pase_c_12_1")
 medianVars <- c("use_health_service_8")
 
 # temp <- df[df$time %in% c(0,1) & df$gender == "M" & df$age_group == "60-69", ]
-temp <- df[df$time %in% c(1,2)
+temp <- df[df$time %in% c(0,2)
              # & df$covid %in% 0 # outside covid waves
            # & df$risk_score.bl %in% lo
              , ] 
@@ -808,7 +819,8 @@ vars <- c("Survey_centre", "wbs_survey_date", "gender", "dob",
           "Incontinence", "Hospital", "Hospital_day", # "Hospital_score", 
           "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
           "Drug_use", # "Drug_use_score", 
-          "risk_score", "risk_level", "digital", "Centre", "NGO")
+          "risk_score", "risk_level", "digital", "Centre", "NGO"
+          )
 
 allVars <- c("Carer", "Hypertension", "Hypertension_HA",
              "Diabetes", "Diabetes_HA", "Cholesterol", "Heart", # "Heart_score", 
@@ -824,7 +836,8 @@ allVars <- c("Carer", "Hypertension", "Hypertension_HA",
              "Incontinence", "Hospital", "Hospital_day", # "Hospital_score", 
              "Aeservices", "Aeservices_day", "SOPD", "GOPD", "Clinic", "Elderly_centre", 
              "Drug_use", # "Drug_use_score", 
-             "risk_score")
+             "risk_score"
+             )
 
 wbs$housing_type <- ifelse(wbs$housing_type %in% c(4,5), 3, wbs$housing_type) # recode 4&5 to 3 (1=public rental housing, 2=subsidized-sale housing, 3=private housing, 4=Home for the Aged, 5=others)
 wbs$married <- ifelse(wbs$marital %in% 2, 1, 0) # (1= single, 2=married, 3=widowed, 4=divorced/separated)
@@ -895,30 +908,30 @@ dim = c(2,24))) %>% as.data.frame()
 # wbs pre-post results ----
 temp <- wbs
 
-# high risk at 1st round WBS & did baseline
-temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
-# temp <- temp[temp$member_id %in%
-#                df$member_id
-#                # dfwide$member_id[(as.Date(dfwide$ehealth_eval_timestamp.t0)+84) < dfwide$wbs_survey_date.r2]
-#              ,]
-temp <- merge(temp, dfwide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
-              by=c("member_id"), all.x = TRUE)
-# temp <- temp[temp$risk_score.r1 %in% lo,]
-# temp <- temp[temp$covid %in% 0, ]
-
-# # low risk at 1st round WBS & not done telephone survey
-# temp <- wbs
-# temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-07-31'),]
-# 
-# temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level %in% c(1, 2)], ]
-# temp <- temp[temp$member_id %!in%
-#                df$member_id
-#                # dfwide$member_id[as.Date(dfwide$ehealth_eval_timestamp.t0) < dfwide$wbs_survey_date.r2]
-#                ,]
-# temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
+# # high risk at 1st round WBS & did baseline
+# temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level == 3], ]
+# # temp <- temp[temp$member_id %in%
+# #                df$member_id
+# #                # dfwide$member_id[(as.Date(dfwide$ehealth_eval_timestamp.t0)+84) < dfwide$wbs_survey_date.r2]
+# #              ,]
+# temp <- merge(temp, dfwide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
 #               by=c("member_id"), all.x = TRUE)
-# # temp <- temp[temp$risk_score.r1 %in% 13,]
+# # temp <- temp[temp$risk_score.r1 %in% lo,]
 # # temp <- temp[temp$covid %in% 0, ]
+
+# low risk at 1st round WBS & not done telephone survey
+temp <- wbs
+temp <- temp[as.Date(temp$wbs_survey_date) <= as.Date('2022-12-31'),]
+
+temp <- temp[temp$member_id %in% temp$member_id[temp$Round == 1 & temp$risk_level %in% c(1, 2)], ]
+temp <- temp[temp$member_id %!in%
+               df$member_id
+               # dfwide$member_id[as.Date(dfwide$ehealth_eval_timestamp.t0) < dfwide$wbs_survey_date.r2]
+               ,]
+temp <- merge(temp, wbswide[, c("member_id", "risk_score.r1")], # extract item matched by member ID
+              by=c("member_id"), all.x = TRUE)
+# temp <- temp[temp$risk_score.r1 %in% 13,]
+# temp <- temp[temp$covid %in% 0, ]
 
 gen_table(temp, id = "member_id", group = "Round", to_English = FALSE, vars = allVars, 
           ordinalVars = ordinalVars,
