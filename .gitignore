@@ -8,4 +8,5 @@ bert/functions/
 ehealth/raw_data
 ehealth/rename_interviewer.R
 BDDA/
+telecare/R_skripts
 .Rproj.user
