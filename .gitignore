@@ -2,6 +2,7 @@
 !*/
 !*.r
 !*.rmd
+!README.md
 !.gitignore
 !LICENSE
 bert/functions/
